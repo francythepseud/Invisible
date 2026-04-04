@@ -1,0 +1,138 @@
+name: invisible
+
+networks:
+  invisible-net:
+    driver: bridge
+
+services:
+  mesh-gateway:
+    image: invisible-mesh-gateway:local
+    container_name: invisible-mesh
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      net.ipv4.ip_forward: "1"
+      net.ipv6.conf.all.forwarding: "1"
+    environment:
+      MESH_PORT: "8080"
+      WG_INTERFACE: "wg0"
+      WG_PORT: "51820"
+      WG_NETWORK: "10.7.0.0/16"
+      SERVER_ENDPOINT: "${SERVER_ENDPOINT:-127.0.0.1:51820}"
+      SERVER_WG_PRIV: "${SERVER_WG_PRIV}"
+      SERVER_WG_PUB: "${SERVER_WG_PUB}"
+      ADMIN_URL: "http://invisible-admin:8084"
+    ports:
+      - "51821:51820/udp"
+    volumes:
+      - ./data/mesh:/etc/invisible/mesh
+    networks:
+      - invisible-net
+
+  signaling:
+    image: invisible-signaling:local
+    container_name: invisible-signaling
+    restart: unless-stopped
+    environment:
+      PORT: "8081"
+      ADMIN_URL: "http://invisible-admin:8084"
+    networks:
+      - invisible-net
+
+  relay:
+    image: invisible-relay:local
+    container_name: invisible-relay
+    restart: unless-stopped
+    environment:
+      PORT: "8082"
+      MSG_TTL_HOURS: "168"
+      MSG_DB_PATH: "/data/relay.db"
+      ADMIN_URL: "http://invisible-admin:8084"
+    volumes:
+      - ./data/relay:/data
+    networks:
+      - invisible-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: invisible-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "invisible"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "invisible"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invisible -d invisible"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - invisible-net
+
+  legal:
+    image: invisible-legal:local
+    container_name: invisible-legal
+    restart: unless-stopped
+    environment:
+      PORT: "8083"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: "invisible"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "invisible"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - invisible-net
+
+  admin:
+    image: invisible-admin:local
+    container_name: invisible-admin
+    restart: unless-stopped
+    environment:
+      PORT: "8084"
+      ADMIN_TOKEN: "${ADMIN_TOKEN}"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: "invisible"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB: "invisible"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8084/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - invisible-net
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: invisible-nginx
+    restart: unless-stopped
+    depends_on:
+      - mesh-gateway
+      - signaling
+      - relay
+      - legal
+      - admin
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./data/nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "nginx -t || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - invisible-net

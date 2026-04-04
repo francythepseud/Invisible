@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invisible — Documento Tecnico</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050508;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    font-size: 12.5px;
+    line-height: 1.75;
+    padding: 48px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    page-break-after: always;
+  }
+  .cover-label { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #3D6FFF; margin-bottom: 24px; }
+  .cover-title { font-family: 'Playfair Display', serif; font-size: 60px; font-weight: 800; color: #fff; line-height: 1.05; margin-bottom: 12px; }
+  .cover-sub { font-size: 20px; color: #94a3b8; font-weight: 300; margin-bottom: 36px; }
+  .cover-divider { width: 80px; height: 3px; background: linear-gradient(90deg,#3D6FFF,#7C3AED); margin: 28px 0; border-radius: 2px; }
+  .cover-meta { font-size: 11px; color: #475569; margin-top: 40px; }
+  .cover-meta span { color: #64748b; margin-right: 28px; }
+  h1 { font-family: 'Playfair Display', serif; font-size: 28px; font-weight: 800; color: #fff; margin: 44px 0 14px; padding-bottom: 10px; border-bottom: 1px solid #1e2a45; }
+  h2 { font-size: 18px; font-weight: 700; color: #e2e8f0; margin: 32px 0 10px; }
+  h3 { font-size: 14px; font-weight: 600; color: #3D6FFF; margin: 20px 0 8px; letter-spacing: 0.3px; }
+  h4 { font-size: 12px; font-weight: 600; color: #94a3b8; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 1px; }
+  p { margin-bottom: 12px; color: #cbd5e1; }
+  strong { color: #e2e8f0; font-weight: 600; }
+  em { color: #94a3b8; font-style: italic; }
+  .chapter { page-break-before: always; padding-top: 8px; }
+  .chapter-num { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #3D6FFF; margin-bottom: 6px; }
+  /* CODE BLOCKS */
+  pre, code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  pre {
+    background: #080c18;
+    border: 1px solid #1e2a45;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 14px 0;
+    overflow-x: auto;
+    color: #a5b4fc;
+    line-height: 1.6;
+    white-space: pre;
+  }
+  code {
+    background: #0f1729;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #93c5fd;
+    font-size: 11px;
+  }
+  pre code { background: none; padding: 0; color: inherit; }
+  /* UML DIAGRAMS */
+  .uml {
+    background: #03060f;
+    border: 1px solid #1e3a8a;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #7dd3fc;
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  /* TABLES */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 11.5px; }
+  thead tr { background: #0a0f1f; }
+  thead th { padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: #3D6FFF; border-bottom: 2px solid #1e2a45; }
+  tbody tr { border-bottom: 1px solid #0c1020; }
+  tbody tr:nth-child(even) { background: #06080f; }
+  tbody td { padding: 9px 14px; color: #cbd5e1; vertical-align: top; }
+  tbody td:first-child { color: #e2e8f0; font-weight: 500; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  /* CALLOUTS */
+  .callout { background: #070d1e; border-left: 3px solid #3D6FFF; padding: 14px 18px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+  .callout-warn { border-left-color: #f59e0b; }
+  .callout-success { border-left-color: #10b981; }
+  .callout p { margin-bottom: 0; font-size: 12px; }
+  /* HIGHLIGHT BOX */
+  .highlight { background: linear-gradient(135deg,#0c1e4a 0%,#080f2e 100%); border: 1px solid #1e3a8a; border-radius: 10px; padding: 20px 24px; margin: 20px 0; }
+  /* LISTS */
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  li { color: #cbd5e1; margin-bottom: 5px; font-size: 12.5px; }
+  li strong { color: #e2e8f0; }
+  /* TOC */
+  .toc { page-break-after: always; }
+  .toc-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #1a2035; font-size: 12px; }
+  .toc-item a { color: #94a3b8; text-decoration: none; }
+  .toc-section { font-weight: 700; color: #e2e8f0; margin-top: 6px; }
+  .toc-sub { padding-left: 18px; color: #64748b; font-size: 11px; }
+  .toc-subsub { padding-left: 36px; color: #475569; font-size: 11px; }
+  /* BADGE */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 10px; font-weight: 600; margin: 0 3px; }
+  .badge-blue { background: #1e3a8a; color: #93c5fd; }
+  .badge-green { background: #064e3b; color: #6ee7b7; }
+  /* SECTION DIV */
+  .sdiv { width: 100%; height: 1px; background: linear-gradient(90deg,#3D6FFF22,transparent); margin: 28px 0; }
+  /* KEY HIERARCHY */
+  .key-box { background: #060a14; border: 1px solid #1e2a45; border-radius: 6px; padding: 12px 16px; margin: 8px 0; }
+  .key-name { color: #fbbf24; font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500; }
+  .key-algo { color: #6ee7b7; font-size: 11px; margin-left: 8px; }
+  .key-desc { color: #94a3b8; font-size: 11.5px; margin-top: 4px; }
+  /* FOOTER */
+  .page-footer { margin-top: 48px; padding-top: 14px; border-top: 1px solid #1e2a45; font-size: 10px; color: #334155; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="cover-label">Documento Tecnico — Versione 1.0</div>
+  <div class="cover-title">INVISIBLE</div>
+  <div class="cover-sub">Architettura Tecnica, Protocolli Crittografici<br>e Specifiche di Sistema</div>
+  <div class="cover-divider"></div>
+  <p style="color:#94a3b8;max-width:520px;font-size:13px;line-height:1.8;">Specifica tecnica completa dell'architettura di Invisible: microservizi Go, protocollo Signal (X3DH + Double Ratchet), rete mesh WireGuard, stack Flutter e infrastruttura di sicurezza.</p>
+  <div class="cover-meta">
+    <span>CONFIDENZIALE</span>
+    <span>Documento Tecnico</span>
+    <span>Stack: Flutter · Go 1.21 · WireGuard · Docker</span>
+    <span>2026</span>
+  </div>
+</div>
+
+<!-- TOC -->
+<div class="toc">
+  <h1 style="page-break-before:avoid">Indice</h1>
+  <div class="toc-item toc-section"><a href="#cap1">1. Panoramica dell'Architettura di Sistema</a></div>
+  <div class="toc-item toc-section"><a href="#cap2">2. Stack Tecnologico</a></div>
+  <div class="toc-item toc-section"><a href="#cap3">3. Architettura Microservizi Server</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.1 mesh-gateway</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.2 signaling</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.3 relay</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.4 nginx</a></div>
+  <div class="toc-item toc-section"><a href="#cap4">4. Protocollo Crittografico</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.1 Generazione Identità</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.2 X3DH — Extended Triple Diffie-Hellman</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.3 Double Ratchet Algorithm</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.4 Gerarchia delle Chiavi</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.5 Cifratura Media</a></div>
+  <div class="toc-item toc-section"><a href="#cap5">5. Rete WireGuard Mesh</a></div>
+  <div class="toc-item toc-section"><a href="#cap6">6. Architettura App Flutter</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.1 Struttura Directory</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.2 Layer Services</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.3 Layer Network</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.4 Layer Crypto</a></div>
+  <div class="toc-item toc-section"><a href="#cap7">7. Schema Database SQLCipher</a></div>
+  <div class="toc-item toc-section"><a href="#cap8">8. Diagrammi UML di Sequenza</a></div>
+  <div class="toc-item toc-section"><a href="#cap9">9. API Reference</a></div>
+  <div class="toc-item toc-section"><a href="#cap10">10. Sicurezza Android Native</a></div>
+  <div class="toc-item toc-section"><a href="#cap11">11. Sicurezza Infrastruttura VPS</a></div>
+  <div class="toc-item toc-section"><a href="#cap12">12. Build e Deploy</a></div>
+  <div class="toc-item toc-section"><a href="#cap13">13. Payload e Formato Messaggi</a></div>
+  <div class="toc-item toc-section"><a href="#cap14">14. Elementi di Novità Tecnica per Brevetto</a></div>
+  <div class="toc-item toc-section"><a href="#cap15">15. Vulnerabilità Note e Mitigazioni</a></div>
+</div>
+
+<!-- CAP 1 -->
+<div class="chapter" id="cap1">
+  <div class="chapter-num">Capitolo 1</div>
+  <h1>Panoramica dell'Architettura di Sistema</h1>
+
+  <p>Invisible è un sistema distribuito composto da un'applicazione mobile Flutter e quattro microservizi Go orchestrati tramite Docker Compose su VPS Linux. La comunicazione tra client e server avviene esclusivamente attraverso tunnel WireGuard cifrati, con un ulteriore layer TLS 1.3 gestito da nginx come reverse proxy.</p>
+
+<pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                    DISPOSITIVO MOBILE (Flutter)                      │
+│                                                                      │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐   │
+│  │  Crypto  │  │ Services │  │ Network  │  │   UI / Screens   │   │
+│  │  Layer   │  │  Layer   │  │  Layer   │  │                  │   │
+│  │ X3DH     │  │ Message  │  │ Relay WS │  │ Chat / Contacts  │   │
+│  │ D.Ratchet│  │ Profile  │  │ Signal WS│  │ Calls / Settings │   │
+│  │ Media    │  │ Session  │  │ WireGuard│  │ QR / Login       │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘   │
+│                                                                      │
+│  SQLCipher DB (locale, cifrato AES-256)                              │
+│  Android KeyStore / iOS Keychain (chiavi private)                    │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │ WireGuard UDP :51820 (cifrato)
+                           │ + TLS 1.3 interno
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                         VPS (Ubuntu 24.04)                           │
+│                                                                      │
+│  UFW Firewall → solo 22/80/443/51820                                │
+│                                                                      │
+│  ┌─────────────────────────────────────────────────────────────┐   │
+│  │ WireGuard wg0 (:51820/UDP)  — assegna IP mesh 10.7.x.x      │   │
+│  └─────────────────────────────────────────────────────────────┘   │
+│                           │                                          │
+│  ┌────────────────────────▼────────────────────────────────────┐   │
+│  │ nginx (:443 TLS 1.3)  — reverse proxy, rate limiting, HSTS  │   │
+│  └────┬──────────────┬──────────────┬───────────────────────────┘   │
+│       │              │              │                                 │
+│  ┌────▼───┐   ┌──────▼──┐   ┌─────▼──────┐                        │
+│  │ mesh-  │   │signaling│   │   relay    │                        │
+│  │gateway │   │  :8081  │   │   :8082    │                        │
+│  │  :8080 │   │  (WS)   │   │   (WS)     │                        │
+│  │ Go/Ed25│   │Go/Ed25  │   │ Go/Ed25519 │                        │
+│  └────────┘   └─────────┘   └────────────┘                        │
+└─────────────────────────────────────────────────────────────────────┘</pre>
+
+  <h2>1.1 Principi Architetturali</h2>
+  <ul>
+    <li><strong>Zero Knowledge Server</strong> — il server non possiede mai informazioni sufficienti a decifrare le comunicazioni</li>
+    <li><strong>Defense in Depth</strong> — tre layer di cifratura indipendenti e sovrapposti</li>
+    <li><strong>Minimal Trust</strong> — ogni componente può essere compromesso senza esporre il sistema completo</li>
+    <li><strong>Local-First Cryptography</strong> — le chiavi nascono e muoiono sul dispositivo, mai trasmesse</li>
+    <li><strong>Microservices Isolation</strong> — ogni servizio ha scope limitato, nessun servizio ha visibilità globale</li>
+  </ul>
+
+  <h2>1.2 Flusso di Comunicazione (end-to-end)</h2>
+<pre>
+[App A]                [WireGuard]          [nginx/relay]          [WireGuard]          [App B]
+  │                        │                     │                     │                   │
+  ├─ cifra msg (DR) ───────────────────────────────────────────────────────────────────────►│
+  │   └ AES-256-GCM msg_key                       │                     │              decifra│
+  ├─ wrap in TLS ─────────────────────────────────►│                     │                   │
+  ├─ cifra WireGuard ──────►│                      │                     │                   │
+  │                         ├─ UDP cifrato ────────►│                     │                   │
+  │                         │                      ├─ decifra TLS        │                   │
+  │                         │                      ├─ vede: ciphertext   │                   │
+  │                         │                      │  opaco → instrada   │                   │
+  │                         │                      ├────────────────────►│ ◄─ UDP a 10.7.x.x │
+  │                         │                      │                     ├─ decifra WireGuard │
+  │                         │                      │                     ├─ decifra TLS       │
+  │                         │                      │                     └────────────────────►│</pre>
+</div>
+
+<!-- CAP 2 -->
+<div class="chapter" id="cap2">
+  <div class="chapter-num">Capitolo 2</div>
+  <h1>Stack Tecnologico</h1>
+
+  <h2>2.1 Client Mobile</h2>
+  <table>
+    <thead><tr><th>Componente</th><th>Versione</th><th>Ruolo</th></tr></thead>
+    <tbody>
+      <tr><td>Flutter / Dart</td><td>≥ 3.x</td><td>Framework UI cross-platform Android/iOS</td></tr>
+      <tr><td>flutter_webrtc</td><td>^1.3.1</td><td>Chiamate audio/video P2P WebRTC</td></tr>
+      <tr><td>web_socket_channel</td><td>^3.0.3</td><td>WebSocket per relay e signaling</td></tr>
+      <tr><td>wireguard_flutter</td><td>^0.1.3</td><td>Client VPN WireGuard</td></tr>
+      <tr><td>sqflite_sqlcipher</td><td>latest</td><td>Database locale cifrato SQLCipher</td></tr>
+      <tr><td>flutter_secure_storage</td><td>latest</td><td>Storage chiavi in Android KeyStore / Keychain</td></tr>
+      <tr><td>safe_device</td><td>latest</td><td>Root/jailbreak/emulator detection</td></tr>
+      <tr><td>share_plus</td><td>^10.0.0</td><td>Condivisione allegati (import only)</td></tr>
+      <tr><td>emoji_picker_flutter</td><td>^4.4.0</td><td>Selezione emoji nella chat</td></tr>
+      <tr><td>shared_preferences</td><td>latest</td><td>Impostazioni utente (non-sensitive)</td></tr>
+      <tr><td>permission_handler</td><td>^11.3.1</td><td>Gestione permessi Android/iOS</td></tr>
+      <tr><td>qr_code_scanner</td><td>latest</td><td>Scansione QR contatti</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2.2 Server</h2>
+  <table>
+    <thead><tr><th>Componente</th><th>Versione</th><th>Ruolo</th></tr></thead>
+    <tbody>
+      <tr><td>Go</td><td>1.21</td><td>Runtime microservizi</td></tr>
+      <tr><td>WireGuard</td><td>kernel module</td><td>VPN mesh</td></tr>
+      <tr><td>nginx</td><td>latest stable</td><td>Reverse proxy TLS 1.3</td></tr>
+      <tr><td>Let's Encrypt / Certbot</td><td>latest</td><td>Certificati TLS RSA-4096</td></tr>
+      <tr><td>Docker + Docker Compose</td><td>latest</td><td>Orchestrazione container</td></tr>
+      <tr><td>Ubuntu</td><td>22.04 / 24.04 LTS</td><td>OS VPS</td></tr>
+    </tbody>
+  </table>
+
+  <h2>2.3 Algoritmi Crittografici</h2>
+  <table>
+    <thead><tr><th>Algoritmo</th><th>Parametri</th><th>Utilizzo</th></tr></thead>
+    <tbody>
+      <tr><td>Ed25519</td><td>256-bit, curve Edwards</td><td>Identity Key — firma digitale, auth mesh</td></tr>
+      <tr><td>X25519 (ECDH)</td><td>256-bit, Curve25519</td><td>Master Key, SPK, ephemeral keys X3DH</td></tr>
+      <tr><td>AES-256-GCM</td><td>256-bit key, 96-bit nonce</td><td>Cifratura messaggi (Double Ratchet), media, SQLCipher</td></tr>
+      <tr><td>HKDF-SHA256</td><td>RFC 5869</td><td>Key derivation in X3DH e Double Ratchet</td></tr>
+      <tr><td>PBKDF2-SHA256</td><td>100.000 iterazioni, salt random</td><td>Derivazione chiave DB da PIN utente</td></tr>
+      <tr><td>ChaCha20-Poly1305</td><td>256-bit</td><td>WireGuard transport (default)</td></tr>
+      <tr><td>Curve25519-DH</td><td>256-bit</td><td>WireGuard handshake</td></tr>
+      <tr><td>RSA-4096</td><td>4096-bit</td><td>Certificato TLS Let's Encrypt</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- CAP 3 -->
+<div class="chapter" id="cap3">
+  <div class="chapter-num">Capitolo 3</div>
+  <h1>Architettura Microservizi Server</h1>
+
+  <h2>3.1 mesh-gateway (:8080)</h2>
+  <p>Gestisce la registrazione dei dispositivi nella rete WireGuard e l'assegnazione degli indirizzi IP mesh. Autentica ogni richiesta tramite firma Ed25519.</p>
+
+  <h4>Endpoints</h4>
+  <table>
+    <thead><tr><th>Metodo</th><th>Path</th><th>Descrizione</th><th>Auth</th></tr></thead>
+    <tbody>
+      <tr><td>POST</td><td>/v1/mesh/register</td><td>Registra public key WireGuard, riceve IP mesh 10.7.x.x</td><td>Ed25519 header</td></tr>
+      <tr><td>GET</td><td>/v1/mesh/peers</td><td>Lista peer WireGuard per la mesh</td><td>Ed25519 header</td></tr>
+      <tr><td>DELETE</td><td>/v1/mesh/unregister</td><td>Rimuove dispositivo dalla mesh</td><td>Ed25519 header</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Logica di autenticazione Ed25519</h4>
+<pre>
+// Header richiesta:
+// X-Identity-Key: base64(ed25519_public_key)
+// X-Timestamp: unix_timestamp
+// X-Signature: base64(ed25519_sign(timestamp + body_hash))
+
+func verifyRequest(r *http.Request) bool {
+    pubKey := base64.Decode(r.Header.Get("X-Identity-Key"))
+    ts     := r.Header.Get("X-Timestamp")
+    sig    := base64.Decode(r.Header.Get("X-Signature"))
+    msg    := ts + hashBody(r.Body)
+    return ed25519.Verify(pubKey, []byte(msg), sig)
+}</pre>
+
+  <h2>3.2 signaling (:8081)</h2>
+  <p>Microservizio WebSocket per il routing dei messaggi SDP/ICE durante la negoziazione WebRTC. Non interpreta il contenuto dei messaggi — li instrada semplicemente al destinatario corretto identificato dal suo IP mesh.</p>
+
+  <h4>Protocollo WebSocket Signaling</h4>
+<pre>
+// Messaggi in formato JSON (cifrati E2E, il server vede solo routing):
+{
+  "type": "offer" | "answer" | "ice-candidate" | "call-invite" | "call-reject" | "call-end",
+  "to":   "10.7.x.x",          // IP mesh destinatario
+  "from": "10.7.x.x",          // IP mesh mittente
+  "data": "base64_cifrato"     // SDP o ICE candidate, cifrato
+}</pre>
+
+  <h2>3.3 relay (:8082)</h2>
+  <p>Microservizio WebSocket per la consegna asincrona dei messaggi E2E. Mantiene una coda per i messaggi destinati a utenti offline per un massimo di 7 giorni. Il relay vede solo ciphertext opaco — non ha accesso al contenuto dei messaggi né alle identità reali dei comunicanti.</p>
+
+  <h4>Struttura messaggio relay</h4>
+<pre>
+// Outer payload (visibile al relay):
+{
+  "to":      "10.7.0.8",            // IP mesh destinatario
+  "from":    "10.7.0.5",            // IP mesh mittente
+  "payload": "base64(json({         // ciphertext opaco
+    \"ciphertext\": \"base64_bytes\",
+    \"header\":     \"base64_header\"
+  }))"
+}
+// Il relay non può decifrare payload — contiene Double Ratchet ciphertext</pre>
+
+  <h4>Coda offline</h4>
+<pre>
+type QueuedMessage struct {
+    ID        string
+    To        string
+    From      string
+    Payload   []byte
+    Timestamp time.Time
+    TTL       time.Duration // 7 giorni
+}
+// I messaggi scaduti vengono eliminati automaticamente
+// Non c'è persistenza a lungo termine — privacy by design</pre>
+
+  <h2>3.4 nginx (reverse proxy)</h2>
+<pre>
+# TLS 1.3 only — nessun TLS 1.2 o inferiore
+ssl_protocols TLSv1.3;
+ssl_session_tickets off;
+
+# HSTS 1 anno con preload
+add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload";
+
+# Rate limiting — protegge da DDoS e brute force
+limit_req_zone $binary_remote_addr zone=api:10m rate=30r/m;
+limit_req zone=api burst=10 nodelay;
+
+# Security headers
+add_header X-Frame-Options DENY;
+add_header X-Content-Type-Options nosniff;
+add_header Referrer-Policy no-referrer;
+
+# WebSocket relay
+location /v1/relay {
+    proxy_pass http://relay:8082;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+
+# WebSocket signaling
+location /v1/signal {
+    proxy_pass http://signaling:8081;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+}
+
+# REST mesh-gateway
+location /v1/mesh {
+    proxy_pass http://mesh-gateway:8080;
+}</pre>
+</div>
+
+<!-- CAP 4 -->
+<div class="chapter" id="cap4">
+  <div class="chapter-num">Capitolo 4</div>
+  <h1>Protocollo Crittografico</h1>
+
+  <h2>4.1 Generazione dell'Identità Crittografica</h2>
+  <p>Al primo avvio, <code>CryptoService.generateKeys()</code> genera in sequenza:</p>
+
+<pre>
+// lib/core/crypto/crypto_service.dart
+
+Future&lt;CryptoKeys&gt; generateKeys() async {
+  // 1. Identity Key Ed25519 — usata per firme e auth mesh
+  final identityKeyPair = await Ed25519().newKeyPair();
+
+  // 2. Master Key X25519 — long-term DH key per X3DH
+  final masterKeyPair = await X25519().newKeyPair();
+
+  // 3. Signed Pre-Key X25519 — DH key separata, firmata con identity key
+  final spkPair = await X25519().newKeyPair();
+  final spkPub  = await spkPair.extractPublicKey();
+  final spkSig  = await Ed25519().sign(spkPub.bytes, keyPair: identityKeyPair);
+
+  return CryptoKeys(
+    identityKeyPair:        identityKeyPair,
+    masterKeyPair:          masterKeyPair,
+    signedPreKeyPair:       spkPair,
+    signedPreKeySignature:  base64.encode(spkSig.bytes),
+  );
+}
+// Chiavi private → Android KeyStore via flutter_secure_storage
+// Chiavi pubbliche → QR code per scambio con contatti</pre>
+
+  <h2>4.2 X3DH — Extended Triple Diffie-Hellman</h2>
+  <p>X3DH viene eseguito una sola volta per ogni nuova conversazione, al momento dell'invio del primo messaggio. Stabilisce una Root Key condivisa tra i due dispositivi senza che le chiavi private vengano mai trasmesse.</p>
+
+  <h3>Formula matematica X3DH</h3>
+<pre>
+Attore A (iniziatore) conosce le chiavi pubbliche di B dal QR:
+  IK_B  = Master Key pubblica di B
+  SPK_B = Signed Pre-Key pubblica di B
+
+A genera una chiave effimera EK_A (usa e getta):
+  EK_A = X25519.newKeyPair()
+
+Calcolo dei tre DH:
+  DH1 = X25519(IK_A_priv,  SPK_B)      // Master di A × SPK di B
+  DH2 = X25519(EK_A_priv,  IK_B)       // Ephemeral di A × Master di B
+  DH3 = X25519(EK_A_priv,  SPK_B)      // Ephemeral di A × SPK di B
+
+Prefisso F (spec Signal): 0xFF ripetuto 32 volte
+  input = F || DH1 || DH2 || DH3
+
+Shared Secret:
+  SK = HKDF-SHA256(input, salt=0x00×32, info="Invisible X3DH v1")
+
+Root Key e Chain Keys iniziali:
+  RootKey, ChainKey_send = HKDF(SK, DH_ratchet_0)</pre>
+
+  <h3>Implementazione in Dart</h3>
+<pre>
+// lib/core/crypto/x3dh.dart
+
+static const _f = List.filled(32, 0xFF); // prefisso spec Signal
+
+Future&lt;Uint8List&gt; performX3DH({
+  required SimpleKeyPair myMasterKey,
+  required SimplePublicKey theirMasterKey,
+  required SimplePublicKey theirSignedPreKey,
+}) async {
+  final ek = await X25519().newKeyPair();
+
+  final dh1 = await X25519().sharedSecretKey(
+    keyPair: myMasterKey, remotePublicKey: theirSignedPreKey);
+  final dh2 = await X25519().sharedSecretKey(
+    keyPair: ek, remotePublicKey: theirMasterKey);
+  final dh3 = await X25519().sharedSecretKey(
+    keyPair: ek, remotePublicKey: theirSignedPreKey);
+
+  final input = Uint8List.fromList([..._f,
+    ...await dh1.extractBytes(),
+    ...await dh2.extractBytes(),
+    ...await dh3.extractBytes()]);
+
+  return _hkdf(input); // → SharedSecret → Root Key iniziale
+}</pre>
+
+  <h2>4.3 Double Ratchet Algorithm</h2>
+  <p>Il Double Ratchet opera in parallelo su due catene di chiavi che avanzano a ogni messaggio. La proprietà fondamentale è che ogni message key viene derivata, usata e immediatamente distrutta — non è mai memorizzata.</p>
+
+  <h3>Struttura della sessione Double Ratchet</h3>
+<pre>
+class RatchetSession {
+  Uint8List rootKey;           // radice della gerarchia — aggiornata al DH ratchet
+  Uint8List sendChainKey;      // catena chiavi di invio
+  Uint8List recvChainKey;      // catena chiavi di ricezione
+  int sendMessageNumber;       // contatore messaggi inviati
+  int recvMessageNumber;       // contatore messaggi ricevuti
+  SimpleKeyPair dhSendKeyPair; // coppia DH corrente per ratchet
+  SimplePublicKey dhRecvKey;   // chiave pubblica DH dell'altro lato
+}</pre>
+
+  <h3>Derivazione Message Key (symmetric ratchet)</h3>
+<pre>
+// Per ogni messaggio inviato:
+Uint8List deriveMessageKey(Uint8List chainKey) {
+  // Message Key = HKDF(chainKey, info="MessageKey")
+  final msgKey   = HKDF.expand(chainKey, info: "MessageKey",  length: 32);
+  // Chain Key avanza: old chain key viene ELIMINATA
+  final newChain = HKDF.expand(chainKey, info: "ChainKey",   length: 32);
+  sendChainKey = newChain; // sovrascrive — no way back
+  return msgKey;           // usa e poi dimentica
+}
+
+// Cifratura con la Message Key:
+Uint8List encrypt(Uint8List plaintext, Uint8List msgKey) {
+  final nonce = _randomBytes(12); // RANDOM per ogni messaggio (non counter)
+  final cipher = AesGcm.with256bits();
+  return cipher.encrypt(plaintext, secretKey: msgKey, nonce: nonce);
+  // msgKey viene zeroizzata dopo l'uso
+}</pre>
+
+  <h3>DH Ratchet (asimmetrico)</h3>
+  <p>Ogni volta che si riceve un messaggio dal partner, viene eseguito un ratchet DH: si genera una nuova coppia di chiavi effimere X25519, si calcola un nuovo shared secret, e si aggiorna la Root Key. Questo introduce nuova casualità e garantisce il break-in recovery.</p>
+
+<pre>
+void performDHRatchet(SimplePublicKey newRemoteKey) {
+  // Calcola nuovo shared secret con la nuova chiave del partner
+  final dhOutput = X25519.sharedSecret(dhSendKeyPair, newRemoteKey);
+
+  // Aggiorna Root Key e ottieni nuova Chain Key di ricezione
+  final (newRootKey, newRecvChain) = HKDF.deriveKeyPair(rootKey, dhOutput);
+  rootKey       = newRootKey;
+  recvChainKey  = newRecvChain;
+
+  // Genera nuova coppia DH per i prossimi messaggi
+  dhSendKeyPair = X25519().newKeyPair();
+
+  // Calcola Chain Key di invio con la nuova coppia
+  final dhOutput2 = X25519.sharedSecret(dhSendKeyPair, newRemoteKey);
+  final (newRoot2, newSendChain) = HKDF.deriveKeyPair(newRootKey, dhOutput2);
+  rootKey      = newRoot2;
+  sendChainKey = newSendChain;
+}</pre>
+
+  <h2>4.4 Gerarchia Completa delle Chiavi</h2>
+
+<pre>
+GENERAZIONE (una tantum, locale):
+┌─────────────────────────────────────────────────────────────────┐
+│  Identity Key (Ed25519)     ← firma SPK, autentica verso server │
+│  Master Key (X25519)        ← long-term DH, usata in X3DH      │
+│  Signed Pre-Key (X25519)    ← DH separata, firmata con IK      │
+│       └─ firma Ed25519 della SPK  ← verifica autenticità SPK   │
+└─────────────────────────────────────────────────────────────────┘
+                           │
+                    X3DH (per sessione, una tantum)
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  Root Key                   ← mai usata direttamente           │
+└───────────────────────────────┬─────────────────────────────────┘
+                ┌───────────────┴──────────────┐
+                ▼                              ▼
+    Send Chain Key                    Recv Chain Key
+                │                              │
+      (per ogni messaggio)          (per ogni messaggio ricevuto)
+                │                              │
+    ┌───────────┴──────────┐       ┌───────────┴──────────┐
+    ▼                      ▼       ▼                      ▼
+Message Key 1         Chain Key 2  Message Key 1     Chain Key 2
+(cifra msg → distrutta)     │      (decifra → distrutta)   │
+                       Message Key 2                  Message Key 2
+                       (cifra → distrutta)            (decifra → distrutta)
+                            ...                            ...
+
+PROPRIETÀ:
+→ Ogni Message Key usata ONCE e poi zero-filled
+→ Forward Secrecy: compromettere oggi NON espone messaggi passati
+→ Break-in Recovery: dopo DH ratchet, messaggi futuri sono protetti
+   anche se le chain keys correnti sono compromesse</pre>
+
+  <h2>4.5 Cifratura Media (allegati)</h2>
+<pre>
+// lib/core/crypto/media_crypto_service.dart
+// Gli allegati NON vengono inclusi nel DR plaintext direttamente
+// Vengono cifrati separatamente e la chiave passa nel DR payload
+
+Future&lt;EncryptedMedia&gt; encryptMedia(Uint8List mediaBytes) async {
+  final key   = _randomBytes(32);    // AES-256 key random
+  final nonce = _randomBytes(12);    // GCM nonce random
+  final cipher = AesGcm.with256bits();
+  final ciphertext = await cipher.encrypt(mediaBytes,
+    secretKey: SecretKey(key), nonce: nonce);
+  return EncryptedMedia(
+    encryptedData: ciphertext.cipherText,
+    key:   key,    // viene passata nel DR payload (cifrata E2E)
+    nonce: nonce,
+  );
+}
+// DR payload JSON:
+// {"t":"image","m":"","d":"base64_ciphertext","k":"base64_key","n":"base64_nonce"}</pre>
+</div>
+
+<!-- CAP 5 -->
+<div class="chapter" id="cap5">
+  <div class="chapter-num">Capitolo 5</div>
+  <h1>Rete WireGuard Mesh</h1>
+
+  <h2>5.1 Topologia</h2>
+<pre>
+                    VPS (10.7.0.1/16)
+                    wg0: server mesh
+                         │
+              ┌──────────┼──────────┐
+              │          │          │
+     10.7.0.2/16   10.7.0.3/16  10.7.0.4/16
+      Dispositivo A  Dispositivo B  Dispositivo C
+
+Tutti i dispositivi comunicano tramite il server mesh.
+L'IP reale di ogni dispositivo è nascosto — il server
+vede solo le chiavi pubbliche WireGuard, non le identità.</pre>
+
+  <h2>5.2 Configurazione Server WireGuard</h2>
+<pre>
+# /etc/wireguard/wg0.conf (generato da setup.sh)
+[Interface]
+Address    = 10.7.0.1/16
+ListenPort = 51820
+PrivateKey = &lt;SERVER_WG_PRIVATE_KEY&gt;
+
+# Regole iptables per routing mesh
+PostUp   = iptables -A FORWARD -i wg0 -j ACCEPT
+PostUp   = iptables -A FORWARD -o wg0 -j ACCEPT
+PostUp   = iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+PostDown = iptables -D FORWARD -i wg0 -j ACCEPT
+PostDown = iptables -D FORWARD -o wg0 -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE
+
+# Peer aggiunto dinamicamente da mesh-gateway:
+[Peer]
+PublicKey  = &lt;DEVICE_WG_PUBLIC_KEY&gt;
+AllowedIPs = 10.7.0.2/32</pre>
+
+  <h2>5.3 Client WireGuard Flutter</h2>
+<pre>
+// lib/core/network/mesh_vpn_service.dart
+
+Future&lt;void&gt; connect(MeshConfig config) async {
+  await WireGuardFlutter.instance.initialize(
+    interfaceName: 'invisible-mesh',
+  );
+  await WireGuardFlutter.instance.startVpn(
+    serverAddress: config.serverAddress,  // IP VPS
+    wgQuickConfig:  _buildConfig(config),  // wg-quick format
+    providerBundleIdentifier: 'com.invisible.invisible.network',
+  );
+}
+
+String _buildConfig(MeshConfig c) => '''
+[Interface]
+PrivateKey = ${c.clientPrivateKey}
+Address    = ${c.assignedMeshIP}/16
+DNS        = 10.7.0.1
+
+[Peer]
+PublicKey  = ${c.serverPublicKey}
+Endpoint   = ${c.serverAddress}:51820
+AllowedIPs = 10.7.0.0/16
+PersistentKeepalive = 25
+''';</pre>
+
+  <h2>5.4 Flusso Registrazione Mesh</h2>
+<pre>
+[Flutter App]                    [mesh-gateway]                [WireGuard wg0]
+     │                                 │                              │
+     ├─ genera WG keypair locale ──────┤                              │
+     ├─ POST /v1/mesh/register ───────►│                              │
+     │   body: {wg_pub_key, ik_pub}    │                              │
+     │   header: Ed25519 signature     │                              │
+     │                                 ├─ verifica firma Ed25519      │
+     │                                 ├─ assegna IP: 10.7.0.X        │
+     │                                 ├─ wg set wg0 peer ... ───────►│
+     │◄── {mesh_ip, server_wg_pub} ────┤                              │
+     │                                 │                              │
+     ├─ avvia tunnel WireGuard ────────────────────────────────────────►│
+     │  (tutto il traffico app ora passa attraverso il tunnel)         │</pre>
+</div>
+
+<!-- CAP 6 -->
+<div class="chapter" id="cap6">
+  <div class="chapter-num">Capitolo 6</div>
+  <h1>Architettura App Flutter</h1>
+
+  <h2>6.1 Struttura Directory</h2>
+<pre>
+lib/
+├── main.dart                          # Entry point — security gate prima di runApp
+├── app.dart                           # StatefulWidget root — auto-lock observer
+├── utils/
+│   ├── constants.dart                 # URL server, certPins da --dart-define
+│   └── navigator_key.dart             # GlobalKey&lt;NavigatorState&gt; globale
+├── core/
+│   ├── crypto/
+│   │   ├── crypto_service.dart        # Generazione chiavi, firma SPK, rotazione
+│   │   ├── x3dh.dart                  # X3DH con prefisso F (spec Signal)
+│   │   ├── double_ratchet.dart        # Double Ratchet, nonce random 12 byte
+│   │   └── media_crypto_service.dart  # AES-256-GCM cifratura allegati
+│   ├── database/
+│   │   └── database_service.dart      # SQLCipher, schema v1, no plaintext
+│   ├── network/
+│   │   ├── invisible_client.dart      # WebSocket relay (auth Ed25519)
+│   │   ├── signaling_client.dart      # WebSocket signaling WebRTC
+│   │   ├── mesh_vpn_service.dart      # WireGuard VPN manager
+│   │   └── pinned_http_client.dart    # HttpClient con TLS strict
+│   ├── security/
+│   │   └── security_service.dart      # Root/jailbreak/emulator detection
+│   └── services/
+│       ├── message_service.dart       # Cache TTL 5min, markAsRead, deleteExpired
+│       ├── conversation_service.dart  # Gestione sessioni X3DH/DR
+│       ├── profile_service.dart       # Multiprofilo, login/logout
+│       ├── session_service.dart       # SPK rotation check
+│       ├── call_service.dart          # WebRTC call manager
+│       └── security_settings_service.dart # Screenshot/autolock/expiry
+├── models/
+│   ├── crypto_keys.dart               # Include signedPreKeySignature
+│   ├── contact.dart                   # Include signedPreKey, signedPreKeySig
+│   ├── message.dart                   # decryptedText runtime-only (no disco)
+│   └── ...
+└── features/
+    ├── auth/screens/                  # Login, Welcome, Splash
+    ├── chat/screens/                  # ChatScreen (emoji, allegati, receipts)
+    ├── contacts/screens/              # ContactsScreen, ContactDetailScreen
+    ├── calls/screens/                 # IncomingCallScreen, CallScreen
+    ├── settings/screens/              # SettingsScreen con sezione Privacy
+    └── qr/screens/                    # QRCodeScreen (share + copy)</pre>
+
+  <h2>6.2 Security Gate in main.dart</h2>
+<pre>
+// lib/main.dart
+Future&lt;void&gt; main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // SECURITY GATE: blocca su dispositivi compromessi
+  final secResult = await SecurityService().runChecks();
+  if (!secResult.isSafe) {
+    runApp(_SecurityBlockedApp(threats: secResult.threats));
+    return; // ← l'app NON si avvia
+  }
+
+  runApp(const InvisibleApp());
+}
+
+// SecurityService.runChecks() — skip in kDebugMode:
+Future&lt;SecurityCheckResult&gt; runChecks() async {
+  if (kDebugMode) return const SecurityCheckResult(isSafe: true, threats: {});
+  final threats = &lt;SecurityThreat&gt;{};
+  if (await SafeDevice.isJailBroken)           threats.add(SecurityThreat.rootJailbreak);
+  if (!await SafeDevice.isRealDevice)          threats.add(SecurityThreat.emulator);
+  if (await SafeDevice.isDevelopmentModeEnable) threats.add(SecurityThreat.developerOptions);
+  if (await SafeDevice.isOnExternalStorage)    threats.add(SecurityThreat.externalStorage);
+  return SecurityCheckResult(isSafe: threats.isEmpty, threats: threats);
+}</pre>
+
+  <h2>6.3 Auto-Lock in app.dart</h2>
+<pre>
+// lib/app.dart — WidgetsBindingObserver per lifecycle
+class _InvisibleAppState extends State&lt;InvisibleApp&gt;
+    with WidgetsBindingObserver {
+
+  DateTime? _pausedAt;
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _pausedAt = DateTime.now();
+    } else if (state == AppLifecycleState.resumed && _pausedAt != null) {
+      final lockMin = _settingsService.autoLockMinutes; // 0 = mai
+      if (lockMin > 0) {
+        final elapsed = DateTime.now().difference(_pausedAt!).inMinutes;
+        if (elapsed >= lockMin) {
+          _profileService.logout(); // azzera cache
+          navigatorKey.currentState?.pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+            (_) => false,
+          );
+        }
+      }
+      _pausedAt = null;
+    }
+  }
+}</pre>
+
+  <h2>6.4 TLS Strict (PinnedHttpClient)</h2>
+<pre>
+// lib/core/network/pinned_http_client.dart
+static HttpClient create() {
+  final client = HttpClient()
+    ..badCertificateCallback = _rejectBadCert
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..idleTimeout     = const Duration(seconds: 30);
+  return client;
+}
+
+// In release: rifiuta SEMPRE certificati non validi
+// In debug: accetta (per proxy testing con Charles/Burp)
+static bool _rejectBadCert(X509Certificate cert, String host, int port) {
+  if (kDebugMode) return true;
+  return false; // false = rifiuta il certificato invalido
+}
+
+// Usato in InvisibleClient (WebSocket relay):
+final ws = await WebSocket.connect(_relayUrl!,
+  customClient: PinnedHttpClient.create());
+_channel = IOWebSocketChannel(ws);</pre>
+</div>
+
+<!-- CAP 7 -->
+<div class="chapter" id="cap7">
+  <div class="chapter-num">Capitolo 7</div>
+  <h1>Schema Database SQLCipher</h1>
+
+  <h2>7.1 Politica di Sicurezza del Database</h2>
+  <div class="callout callout-success">
+    <p><strong>Principio fondamentale:</strong> Il testo in chiaro dei messaggi non viene MAI scritto su disco. Il campo <code>decryptedText</code> nel modello <code>Message</code> è marcato <code>runtime-only</code> e non ha corrispondenza in nessuna colonna del database. Solo il ciphertext cifrato con Double Ratchet viene persistito.</p>
+  </div>
+
+  <h2>7.2 Schema Completo</h2>
+<pre>
+-- PROFILES: identità crittografiche
+CREATE TABLE profiles (
+  id                      TEXT PRIMARY KEY,
+  display_name            TEXT NOT NULL,
+  identity_key_pub        TEXT NOT NULL,  -- Ed25519 public key, base64
+  identity_key_priv_enc   TEXT NOT NULL,  -- Ed25519 private key, cifrata con PIN
+  master_key_pub          TEXT NOT NULL,  -- X25519 public key, base64
+  master_key_priv_enc     TEXT NOT NULL,  -- X25519 private key, cifrata
+  signed_pre_key_pub      TEXT NOT NULL,  -- X25519 SPK public, base64
+  signed_pre_key_priv_enc TEXT NOT NULL,  -- X25519 SPK private, cifrata
+  signed_pre_key_sig      TEXT NOT NULL,  -- Ed25519 firma della SPK
+  mesh_ip                 TEXT,           -- IP WireGuard assegnato
+  wg_private_key_enc      TEXT,           -- WireGuard private key, cifrata
+  created_at              TEXT NOT NULL
+);
+
+-- CONTACTS: contatti di ogni profilo
+CREATE TABLE contacts (
+  id                TEXT PRIMARY KEY,
+  profile_id        TEXT NOT NULL REFERENCES profiles(id),
+  display_name      TEXT NOT NULL,
+  identity_key      TEXT NOT NULL,  -- Ed25519 pub key del contatto
+  master_key        TEXT NOT NULL,  -- X25519 pub key del contatto
+  signed_pre_key    TEXT NOT NULL,  -- X25519 SPK pub del contatto
+  signed_pre_key_sig TEXT NOT NULL, -- firma SPK del contatto
+  mesh_ip           TEXT,           -- IP mesh del contatto
+  last_seen         TEXT,
+  created_at        TEXT NOT NULL
+);
+
+-- MESSAGES: solo ciphertext — mai plaintext
+CREATE TABLE messages (
+  id               TEXT PRIMARY KEY,
+  conversation_id  TEXT NOT NULL,
+  sender_id        TEXT NOT NULL,
+  timestamp        TEXT NOT NULL,
+  ciphertext       BLOB NOT NULL,   -- Double Ratchet ciphertext
+  header           BLOB NOT NULL,   -- DR header (ephemeral DH key, counters)
+  is_read          INTEGER DEFAULT 0,
+  is_sent          INTEGER DEFAULT 0,
+  is_delivered     INTEGER DEFAULT 0,
+  expires_at       TEXT             -- NULL = no scadenza
+  -- NESSUN campo plaintext/text/content
+);
+
+-- SESSIONS: stato Double Ratchet per ogni conversazione
+CREATE TABLE sessions (
+  id                    TEXT PRIMARY KEY,
+  profile_id            TEXT NOT NULL REFERENCES profiles(id),
+  contact_id            TEXT NOT NULL REFERENCES contacts(id),
+  root_key              BLOB NOT NULL,    -- Root Key corrente
+  send_chain_key        BLOB NOT NULL,    -- Chain Key invio
+  recv_chain_key        BLOB NOT NULL,    -- Chain Key ricezione
+  send_message_number   INTEGER DEFAULT 0,
+  recv_message_number   INTEGER DEFAULT 0,
+  dh_send_pub           BLOB NOT NULL,    -- DH ratchet key pubblica corrente
+  dh_send_priv_enc      BLOB NOT NULL,    -- DH ratchet key privata, cifrata
+  dh_recv_pub           BLOB,             -- Ultima DH key ricevuta
+  created_at            TEXT NOT NULL,
+  updated_at            TEXT NOT NULL,
+  UNIQUE(profile_id, contact_id)
+);
+
+-- CALL_LOG: registro chiamate
+CREATE TABLE call_log (
+  id               TEXT PRIMARY KEY,
+  profile_id       TEXT NOT NULL REFERENCES profiles(id),
+  contact_id       TEXT NOT NULL REFERENCES contacts(id),
+  direction        TEXT NOT NULL,  -- 'inbound' | 'outbound'
+  type             TEXT NOT NULL,  -- 'audio' | 'video'
+  started_at       TEXT NOT NULL,
+  ended_at         TEXT,
+  duration_seconds INTEGER DEFAULT 0,
+  status           TEXT NOT NULL   -- 'completed' | 'missed' | 'rejected'
+);</pre>
+
+  <h2>7.3 Cifratura del Database</h2>
+<pre>
+// lib/core/database/database_service.dart
+Future&lt;Database&gt; _openDatabase(String profileId, String pin) async {
+  final path = await getDatabasesPath();
+  final dbPath = join(path, 'invisible_$profileId.db');
+
+  // Chiave derivata dal PIN con PBKDF2-SHA256, 100.000 iterazioni
+  final key = await _deriveKey(pin, profileId);
+
+  return openDatabaseWithOptions(dbPath,
+    options: OpenDatabaseOptions(
+      password: base64.encode(key), // SQLCipher password = chiave derivata
+      version: 1,
+      onCreate: _createSchema,
+    ),
+  );
+}
+
+Future&lt;Uint8List&gt; _deriveKey(String pin, String salt) async {
+  final pbkdf2 = Pbkdf2(
+    macAlgorithm: Hmac.sha256(),
+    iterations:   100000,
+    bits:         256,
+  );
+  return (await pbkdf2.deriveKey(
+    secretKey: SecretKey(utf8.encode(pin)),
+    nonce:     utf8.encode(salt),
+  )).extractBytes();
+}</pre>
+</div>
+
+<!-- CAP 8 -->
+<div class="chapter" id="cap8">
+  <div class="chapter-num">Capitolo 8</div>
+  <h1>Diagrammi UML di Sequenza</h1>
+
+  <h2>8.1 Registrazione Utente e Inizializzazione</h2>
+<div class="uml">
+User          Flutter App        CryptoService      SecureStorage    MeshGateway
+ │                 │                   │                  │               │
+ ├─ first open ──►│                   │                  │               │
+ │                ├─ SecurityService.runChecks()          │               │
+ │                │   (root? emulator? devOptions?)       │               │
+ │◄─ WelcomeScreen┤                   │                  │               │
+ ├─ "Crea Profilo"►│                  │                  │               │
+ │                ├─ generateKeys() ─►│                  │               │
+ │                │                   ├─ Ed25519.newKeyPair()            │
+ │                │                   ├─ X25519.newKeyPair()  (master)   │
+ │                │                   ├─ X25519.newKeyPair()  (SPK)      │
+ │                │                   ├─ Ed25519.sign(SPK_pub)           │
+ │                │◄── CryptoKeys ────┤                  │               │
+ ├─ inserisce PIN►│                  │                  │               │
+ │                ├─ cifratura priv keys con PIN          │               │
+ │                ├─ write(priv_keys_enc) ────────────────►│             │
+ │                ├─ POST /v1/mesh/register ──────────────────────────────►│
+ │                │   {ik_pub, wg_pub, Ed25519_signature} │               │
+ │                │◄────────────────── {mesh_ip: 10.7.x.x, wg_server_pub}│
+ │                ├─ avvia WireGuard tunnel                │               │
+ │◄─ HomeScreen ──┤                   │                  │               │</div>
+
+  <h2>8.2 Scambio Contatto e Prima Sessione X3DH</h2>
+<div class="uml">
+User A           App A              X3DH Service       App B (via QR)
+ │                │                    │                    │
+ │                ├─ mostra QR ────────────────────────────►│
+ │                │  {v:1, mk, ik, spk, sig}                │
+ ├─ scansiona QR►│                    │                    │
+ │                ├─ verifica sig SPK ►│                    │
+ │                │   Ed25519.verify(spk_pub, sig, ik_pub)  │
+ │                ├─ salva contatto B  │                    │
+ ├─ primo msg ───►│                   │                    │
+ │                ├─ X3DH(ik_A, ek_A, ik_B, spk_B) ───────►│
+ │                │   DH1 = X25519(IK_A, SPK_B)            │
+ │                │   DH2 = X25519(EK_A, IK_B)             │
+ │                │   DH3 = X25519(EK_A, SPK_B)            │
+ │                │   SK  = HKDF(F||DH1||DH2||DH3)         │
+ │                ├─ inizializza DR session                  │
+ │                ├─ DR.encrypt(plaintext) ─►               │
+ │                │   msg_key = HKDF(chain_key)             │
+ │                │   cipher  = AES-256-GCM(msg_key, nonce) │
+ │                │   distrugge msg_key                     │
+ │                ├─ invia {ciphertext, header, ek_pub}─────────────────►relay
+ │                │   (relay vede solo bytes opachi)                       │</div>
+
+  <h2>8.3 Double Ratchet — Ciclo Messaggi</h2>
+<div class="uml">
+A (invia)              Double Ratchet              B (riceve)
+    │                        │                         │
+    ├─ msg_key_1 = HKDF(CK_send) ──────────────────────►│
+    ├─ CK_send → CK_send_2 (avanza)                      │
+    ├─ AES-GCM(msg_1, msg_key_1, nonce_random)           │
+    ├─ ZERO msg_key_1                                     │
+    │                        │              ← riceve msg_1 │
+    │                        │           msg_key_1=HKDF(CK_recv)
+    │                        │           AES-GCM.decrypt(msg_1, msg_key_1)
+    │                        │           CK_recv → CK_recv_2
+    │                        │           ZERO msg_key_1
+    │                        │                         │
+    │ [B risponde — DH Ratchet si attiva]               │
+    │                        │◄── nuovo DH_pub di B ────┤
+    ├─ DH Ratchet:           │                         │
+    │   new_ek_A = X25519.newKeyPair()                 │
+    │   dh = X25519(new_ek_A, DH_pub_B)               │
+    │   (root_key, CK_send) = HKDF(root_key, dh)      │
+    ├─ msg_key_2 = HKDF(nuova CK_send)                 │
+    ├─ ← nuova casualità introdotta — break-in recovery  │</div>
+
+  <h2>8.4 Flusso Chiamata WebRTC</h2>
+<div class="uml">
+Caller (A)              App A            Signaling WS           App B          Callee (B)
+    │                    │                    │                   │                 │
+    ├─ tocca "chiama" ──►│                   │                   │                 │
+    │                    ├─ CallService.initiateCall()            │                 │
+    │                    ├─ crea PeerConnection                   │                 │
+    │                    ├─ getUserMedia() (audio/video)          │                 │
+    │                    ├─ createOffer() → SDP_offer            │                 │
+    │                    ├─ invia {type:call-invite, to:10.7.x, data:SDP} ────────►│
+    │                    │                    │                   │                 │
+    │                    │                    │     instrada ────►│                 │
+    │                    │                    │                   ├─ incomingCallStream emit
+    │                    │                    │                   │◄── risponde ────┤
+    │                    │                    │◄── {type:answer, SDP_answer} ──────┤
+    │                    │◄── SDP_answer ─────┤                   │                 │
+    │                    ├─ setRemoteDescription(SDP_answer)      │                 │
+    │                    │                    │                   │                 │
+    │    ◄──────────────────── ICE candidates scambiati ──────────────────────────►│
+    │           (IP nei candidates = 10.7.x.x mesh, non IP reali)                  │
+    │                    │                    │                   │                 │
+    │    ◄═══════════════ WebRTC P2P DIRETTO (SRTP/DTLS E2E) ═══════════════════►  │
+    │       traffico media non passa dal server — cifrato end-to-end                │</div>
+
+  <h2>8.5 Panic Button — Wipe Crittografico</h2>
+<div class="uml">
+User              App                 SecureStorage        SQLCipher DB
+ │                 │                       │                    │
+ ├─ Panic Button ►│                       │                   │
+ │                ├─ doppia conferma      │                   │
+ ├─ conferma ────►│                       │                   │
+ │                ├─ overwrite keys ──────►│                  │
+ │                │   (sovrascrive con random bytes)           │
+ │                ├─ delete all keys ─────►│                  │
+ │                ├─ delete DB ────────────────────────────────►│
+ │                │   (file fisicamente eliminato)             │
+ │                ├─ SharedPreferences.clear()                 │
+ │                ├─ stopVpn() + rimuovi config WireGuard      │
+ │                ├─ restart app → WelcomeScreen               │
+ │◄─ app "nuova" ─┤                       │                   │
+ │  (nessuna traccia del profilo precedente rimasta)           │</div>
+</div>
+
+<!-- CAP 9 -->
+<div class="chapter" id="cap9">
+  <div class="chapter-num">Capitolo 9</div>
+  <h1>API Reference</h1>
+
+  <h2>9.1 mesh-gateway REST API</h2>
+  <table>
+    <thead><tr><th>Metodo</th><th>Endpoint</th><th>Request Body</th><th>Response</th><th>Auth</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>POST</td><td>/v1/mesh/register</td>
+        <td><code>{"ik_pub":"base64","wg_pub":"base64"}</code></td>
+        <td><code>{"mesh_ip":"10.7.x.x","server_wg_pub":"base64","server_endpoint":"host:51820"}</code></td>
+        <td>Ed25519</td>
+      </tr>
+      <tr>
+        <td>GET</td><td>/v1/mesh/peers</td>
+        <td>—</td>
+        <td><code>[{"ik_pub":"b64","wg_pub":"b64","mesh_ip":"10.7.x.x"}]</code></td>
+        <td>Ed25519</td>
+      </tr>
+      <tr>
+        <td>PUT</td><td>/v1/mesh/refresh</td>
+        <td><code>{"wg_pub":"base64"}</code></td>
+        <td><code>{"mesh_ip":"10.7.x.x","ok":true}</code></td>
+        <td>Ed25519</td>
+      </tr>
+      <tr>
+        <td>DELETE</td><td>/v1/mesh/unregister</td>
+        <td><code>{"ik_pub":"base64"}</code></td>
+        <td><code>{"ok":true}</code></td>
+        <td>Ed25519</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>9.2 Autenticazione Ed25519 (header comuni)</h2>
+<pre>
+X-Identity-Key: base64(ed25519_public_key)
+X-Timestamp:    unix_timestamp_seconds
+X-Signature:    base64(ed25519_sign(sha256(timestamp + request_body)))</pre>
+
+  <h2>9.3 relay WebSocket Protocol</h2>
+<pre>
+// Connessione: wss://domain/v1/relay
+// Upgrade WebSocket con header auth Ed25519
+
+// SEND message:
+{
+  "type":    "message",
+  "to":      "10.7.0.8",
+  "payload": "base64(json({ciphertext: bytes, header: bytes}))"
+}
+
+// RECEIVE message:
+{
+  "type":    "message",
+  "from":    "10.7.0.5",
+  "payload": "base64(json({ciphertext: bytes, header: bytes}))",
+  "ts":      1234567890
+}
+
+// ACK read receipt:
+{
+  "type": "receipt",
+  "to":   "10.7.0.5",
+  "id":   "message_id"
+}</pre>
+
+  <h2>9.4 signaling WebSocket Protocol</h2>
+<pre>
+// Connessione: wss://domain/v1/signal
+// Upgrade WebSocket con header auth Ed25519
+
+// Tipi di messaggi:
+{ "type": "call-invite",    "to": "10.7.x.x", "data": "base64_SDP_offer" }
+{ "type": "call-answer",    "to": "10.7.x.x", "data": "base64_SDP_answer" }
+{ "type": "ice-candidate",  "to": "10.7.x.x", "data": "base64_ICE_candidate" }
+{ "type": "call-reject",    "to": "10.7.x.x", "data": "" }
+{ "type": "call-end",       "to": "10.7.x.x", "data": "" }</pre>
+</div>
+
+<!-- CAP 10 -->
+<div class="chapter" id="cap10">
+  <div class="chapter-num">Capitolo 10</div>
+  <h1>Sicurezza Android Native</h1>
+
+  <h2>10.1 FLAG_SECURE e MethodChannel</h2>
+<pre>
+// android/app/src/main/kotlin/com/invisible/invisible/MainActivity.kt
+class MainActivity : FlutterActivity() {
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+    // FLAG_SECURE di default: no screenshot, no multitasking preview
+    window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+  }
+
+  override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+    super.configureFlutterEngine(flutterEngine)
+    MethodChannel(flutterEngine.dartExecutor.binaryMessenger,
+      "com.invisible.invisible/security"
+    ).setMethodCallHandler { call, result ->
+      if (call.method == "setScreenshotPrevention") {
+        val enable = call.arguments as Boolean
+        runOnUiThread {
+          if (enable) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+          else        window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+        result.success(null)
+      } else result.notImplemented()
+    }
+  }
+}</pre>
+
+  <h2>10.2 Network Security Config</h2>
+<pre>
+&lt;!-- android/app/src/main/res/xml/network_security_config.xml --&gt;
+&lt;network-security-config&gt;
+  &lt;base-config cleartextTrafficPermitted="false"&gt;
+    &lt;!-- SOLO CA di sistema: blocca Burp/Charles a livello OS --&gt;
+    &lt;trust-anchors&gt;
+      &lt;certificates src="system"/&gt;
+      &lt;!-- NO: certificates src="user" — utente non può installare CA custom --&gt;
+    &lt;/trust-anchors&gt;
+  &lt;/base-config&gt;
+
+  &lt;!-- DOPO DEPLOY: decommentare con il pin reale --&gt;
+  &lt;!--
+  &lt;domain-config&gt;
+    &lt;domain includeSubdomains="true"&gt;tuodominio.com&lt;/domain&gt;
+    &lt;pin-set expiration="2027-01-01"&gt;
+      &lt;pin digest="SHA-256"&gt;SPKI_HASH_CERTIFICATO_PRIMARIO==&lt;/pin&gt;
+      &lt;pin digest="SHA-256"&gt;SPKI_HASH_CERTIFICATO_BACKUP==&lt;/pin&gt;
+    &lt;/pin-set&gt;
+  &lt;/domain-config&gt;
+  --&gt;
+&lt;/network-security-config&gt;</pre>
+
+  <h2>10.3 AndroidManifest.xml — Hardening</h2>
+<pre>
+&lt;application
+  android:networkSecurityConfig="@xml/network_security_config"
+  android:allowBackup="false"
+  android:fullBackupContent="false"
+  ... &gt;</pre>
+
+  <h2>10.4 ProGuard / R8</h2>
+<pre>
+# android/app/proguard-rules.pro
+
+# Flutter core
+-keep class io.flutter.** { *; }
+-keep class io.flutter.embedding.** { *; }
+
+# WebRTC
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**
+
+# WireGuard
+-keep class com.wireguard.** { *; }
+
+# SQLCipher
+-keep class net.sqlcipher.** { *; }
+-keep class net.sqlcipher.database.** { *; }
+
+# JNI natives
+-keepclasseswithmembernames class * {
+    native &lt;methods&gt;;
+}
+
+# Rimuovi log di debug dalla release
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}</pre>
+
+  <h2>10.5 Build Release con Obfuscation</h2>
+<pre>
+flutter build apk --release \
+  --obfuscate \
+  --split-debug-info=./symbols/android \
+  --dart-define=DOMAIN=tuodominio.com \
+  --dart-define=VPS_IP=x.x.x.x \
+  --dart-define=WG_PUBKEY=base64_server_wg_public_key \
+  --dart-define=CERT_PIN_1=base64_spki_sha256_pin_1 \
+  --dart-define=CERT_PIN_2=base64_spki_sha256_pin_2</pre>
+</div>
+
+<!-- CAP 11 -->
+<div class="chapter" id="cap11">
+  <div class="chapter-num">Capitolo 11</div>
+  <h1>Sicurezza Infrastruttura VPS</h1>
+
+  <h2>11.1 Firewall UFW</h2>
+<pre>
+ufw default deny incoming
+ufw default deny forward
+ufw default allow outgoing
+ufw allow 22/tcp    comment 'SSH'
+ufw allow 80/tcp    comment 'HTTP → HTTPS redirect'
+ufw allow 443/tcp   comment 'HTTPS + WSS'
+ufw allow 51820/udp comment 'WireGuard mesh'
+ufw enable
+
+# Docker: disabilitare manipolazione iptables per rispettare UFW
+# /etc/docker/daemon.json:
+{ "iptables": false, "log-driver": "json-file",
+  "log-opts": {"max-size":"10m","max-file":"3"} }</pre>
+
+  <h2>11.2 SSH Hardening</h2>
+<pre>
+# /etc/ssh/sshd_config
+PermitRootLogin             no
+PasswordAuthentication      no
+PubkeyAuthentication        yes
+MaxAuthTries                3
+LoginGraceTime              30
+X11Forwarding               no
+AllowTcpForwarding          no
+AllowAgentForwarding        no
+KexAlgorithms               curve25519-sha256,curve25519-sha256@libssh.org
+Ciphers                     chacha20-poly1305@openssh.com,aes256-gcm@openssh.com
+MACs                        hmac-sha2-256-etm@openssh.com</pre>
+
+  <h2>11.3 Fail2ban</h2>
+<pre>
+# /etc/fail2ban/jail.local
+[sshd]
+enabled  = true
+maxretry = 3
+bantime  = 86400    # 24 ore
+findtime = 600
+
+[nginx-http-auth]
+enabled  = true
+maxretry = 5
+bantime  = 3600
+
+[nginx-limit-req]
+enabled  = true
+maxretry = 10
+bantime  = 3600
+
+[nginx-badbots]
+enabled  = true
+maxretry = 2
+bantime  = 86400
+
+# IMPORTANTE: il relay WebSocket NON è in nessun jail
+# per non bannare utenti con connessioni instabili</pre>
+
+  <h2>11.4 Kernel Sysctl Hardening</h2>
+<pre>
+# /etc/sysctl.d/99-invisible-hardening.conf
+net.ipv4.tcp_syncookies          = 1   # Anti SYN flood
+net.ipv4.conf.all.rp_filter      = 1   # Anti IP spoofing
+net.ipv4.conf.all.accept_redirects = 0 # No ICMP redirect
+net.ipv4.conf.all.send_redirects   = 0
+net.ipv4.conf.all.accept_source_route = 0
+kernel.kptr_restrict             = 2   # Nasconde puntatori kernel
+kernel.dmesg_restrict            = 1   # Restringe accesso dmesg
+kernel.suid_dumpable             = 0   # No core dump SUID
+fs.protected_hardlinks           = 1
+fs.protected_symlinks            = 1</pre>
+</div>
+
+<!-- CAP 12 -->
+<div class="chapter" id="cap12">
+  <div class="chapter-num">Capitolo 12</div>
+  <h1>Build e Deploy</h1>
+
+  <h2>12.1 Deploy VPS (setup.sh)</h2>
+<pre>
+# Prerequisiti:
+# 1. DNS A record: tuodominio.com → IP del VPS
+# 2. Chiave SSH pubblica copiata sul VPS
+
+cd server/
+bash setup.sh tuodominio.com
+
+# setup.sh esegue in sequenza:
+# 1. apt update + install (docker, wireguard, nginx, certbot, ufw, fail2ban)
+# 2. UFW hardening
+# 3. SSH hardening
+# 4. Fail2ban configuration
+# 5. Kernel sysctl hardening
+# 6. Generazione chiavi WireGuard server
+# 7. Certbot RSA-4096 per tuodominio.com
+# 8. nginx config (TLS 1.3, reverse proxy, rate limiting)
+# 9. .env con chiavi generate (WG_PRIVATE_KEY, WG_PUBLIC_KEY, domain)
+# 10. docker compose up -d</pre>
+
+  <h2>12.2 Aggiornamento URL nell'App</h2>
+<pre>
+// lib/utils/constants.dart
+class AppConstants {
+  static const String domain     = String.fromEnvironment('DOMAIN',     defaultValue: 'localhost');
+  static const String vpsIP      = String.fromEnvironment('VPS_IP',     defaultValue: '127.0.0.1');
+  static const String wgPubKey   = String.fromEnvironment('WG_PUBKEY',  defaultValue: '');
+
+  static String get relayUrl     => 'wss://$domain/v1/relay';
+  static String get signalingUrl => 'wss://$domain/v1/signal';
+  static String get meshUrl      => 'https://$domain/v1/mesh';
+
+  static List&lt;String&gt; get certPins {
+    const raw = [
+      String.fromEnvironment('CERT_PIN_1', defaultValue: ''),
+      String.fromEnvironment('CERT_PIN_2', defaultValue: ''),
+    ];
+    return raw.where((p) => p.isNotEmpty).toList();
+  }
+}</pre>
+
+  <h2>12.3 Ottenere il SPKI Hash per Cert Pinning</h2>
+<pre>
+# Dopo deploy, estrarre il pin SHA-256 del certificato:
+openssl s_client -connect tuodominio.com:443 2>/dev/null \
+  | openssl x509 -pubkey -noout \
+  | openssl pkey -pubin -outform DER \
+  | openssl dgst -sha256 -binary \
+  | base64
+
+# Copiare il valore in:
+# 1. --dart-define=CERT_PIN_1=&lt;hash&gt;
+# 2. network_security_config.xml (decommentare il blocco domain-config)</pre>
+</div>
+
+<!-- CAP 13 -->
+<div class="chapter" id="cap13">
+  <div class="chapter-num">Capitolo 13</div>
+  <h1>Payload e Formato Messaggi</h1>
+
+  <h2>13.1 Struttura a 3 Layer</h2>
+<pre>
+LAYER 1 — DR Plaintext (mai toccato dal server):
+{
+  "t": "text" | "image" | "file",
+  "m": "testo del messaggio",
+  "d": "base64_media_ciphertext",  // solo se allegato
+  "k": "base64_media_key",         // chiave AES-256 del media
+  "n": "base64_media_nonce"        // nonce GCM del media
+}
+
+LAYER 2 — Double Ratchet Ciphertext + Header:
+{
+  "ciphertext": "base64_bytes",    // AES-256-GCM del DR plaintext
+  "header": {
+    "dh":    "base64_ephemeral_dh_pub",   // chiave DH ratchet corrente
+    "pn":    42,                           // previous chain length
+    "n":     7                             // message number
+  }
+}
+
+LAYER 3 — Relay Outer Payload (ciò che vede il server):
+{
+  "to":      "10.7.0.8",
+  "from":    "10.7.0.5",
+  "payload": "base64(json(Layer 2))"  // server vede SOLO questo
+  // IL SERVER NON SA: tipo messaggio, testo, mittente reale, destinatario reale
+}</pre>
+
+  <h2>13.2 QR Code Identity Format (v1)</h2>
+<pre>
+{
+  "v":   1,
+  "mk":  "base64_X25519_master_public_key",
+  "ik":  "base64_Ed25519_identity_public_key",
+  "spk": "base64_X25519_signed_pre_key_public",
+  "sig": "base64_Ed25519_signature_of_SPK"
+}
+
+// Verifica alla scansione:
+Ed25519.verify(
+  message:   base64.decode(qr["spk"]),
+  signature: base64.decode(qr["sig"]),
+  publicKey: base64.decode(qr["ik"])
+)
+// Se verifica fallisce: QR contraffatto → contatto rifiutato</pre>
+</div>
+
+<!-- CAP 14 -->
+<div class="chapter" id="cap14">
+  <div class="chapter-num">Capitolo 14</div>
+  <h1>Elementi di Novità Tecnica per Brevetto</h1>
+
+  <div class="callout">
+    <p>I seguenti elementi rappresentano combinazioni e implementazioni con caratteri di novità rispetto all'arte anteriore nota. Si raccomanda valutazione formale con avvocato brevettista specializzato in software.</p>
+  </div>
+
+  <h2>14.1 Sistema di Autenticazione con Identità Puramente Crittografica</h2>
+  <p><strong>Arte anteriore:</strong> Tutti i sistemi di messaggistica sicura esistenti (Signal, WhatsApp, Telegram, iMessage) utilizzano identificatori di identità registrati su server centralizzati (numero di telefono, account Apple ID, username).</p>
+  <p><strong>Novità:</strong> Metodo per l'autenticazione e l'instradamento di comunicazioni cifrate tra dispositivi mobili basato esclusivamente su coppie di chiavi crittografiche asimmetriche (Ed25519/X25519) generate localmente, senza registrazione di alcun identificatore su server centralizzati. Il server autentica le richieste verificando firme Ed25519 senza mai memorizzare un mapping tra identità crittografica e identità reale.</p>
+
+  <h2>14.2 Multiprofilo con Isolamento Crittografico su Dispositivo Mobile</h2>
+  <p><strong>Arte anteriore:</strong> Le applicazioni di messaggistica esistenti supportano un singolo account per installazione. Soluzioni multi-account esistenti condividono storage o credenziali tra profili.</p>
+  <p><strong>Novità:</strong> Architettura di gestione di identità crittografiche multiple su un singolo dispositivo mobile con: (a) database SQLCipher fisicamente separati per profilo, (b) chiavi crittografiche indipendenti senza relazione matematica, (c) sessioni Double Ratchet isolate per profilo, (d) autenticazione separata per profilo tramite derivazione PBKDF2 individuale, (e) impossibilità tecnica di correlazione inter-profilo dall'esterno del dispositivo.</p>
+
+  <h2>14.3 Integrazione Rete Mesh per Anonimizzazione IP nelle Comunicazioni WebRTC</h2>
+  <p><strong>Arte anteriore:</strong> Le soluzioni WebRTC esistenti espongono gli IP reali nei candidati ICE oppure utilizzano server TURN per il relay (che comunque conosce gli IP).</p>
+  <p><strong>Novità:</strong> Metodo per l'esecuzione di sessioni WebRTC con anonimizzazione degli indirizzi IP mediante l'integrazione di una rete mesh WireGuard sul dispositivo mobile, dove i candidati ICE contengono esclusivamente indirizzi IP della rete overlay (10.7.x.x) non correlabili agli IP fisici dei dispositivi, eliminando sia l'esposizione IP diretta sia la necessità di server TURN.</p>
+
+  <h2>14.4 Scambio Parametri X3DH via QR con Verifica Crittografica Integrata</h2>
+  <p><strong>Arte anteriore:</strong> I sistemi basati su Signal Protocol distribuiscono le chiavi prekey tramite server centralizzati (Signal Key Distribution Servers).</p>
+  <p><strong>Novità:</strong> Metodo per la distribuzione dei parametri X3DH (IK, Master Key, SPK, firma Ed25519 della SPK) tramite codice QR o stringa trasportabile, con verifica crittografica della firma della Signed Pre-Key al momento dello scambio, eliminando la necessità di server di distribuzione delle chiavi e consentendo la verifica peer-to-peer dell'autenticità dell'identità.</p>
+
+  <h2>14.5 Cifratura a Layer Sovrapposti con Privacy by Design dell'Infrastruttura</h2>
+  <p><strong>Arte anteriore:</strong> Le soluzioni VPN commerciali (NordVPN, ExpressVPN) cifrano il traffico ma non implementano E2E application-layer. Le soluzioni di messaggistica E2E non integrano VPN mesh. Non esiste un sistema commerciale che combini i tre layer.</p>
+  <p><strong>Novità:</strong> Sistema di comunicazione mobile con triple cifratura sovrapposta dove: (a) Layer 1 = WireGuard mesh per anonimizzazione IP e cifratura rete, (b) Layer 2 = TLS 1.3 per protezione trasporto, (c) Layer 3 = Signal Protocol E2E per protezione contenuto. Il design architetturale garantisce che nessun singolo componente del sistema abbia visibilità simultanea su identità, IP reale e contenuto delle comunicazioni.</p>
+</div>
+
+<!-- CAP 15 -->
+<div class="chapter" id="cap15">
+  <div class="chapter-num">Capitolo 15</div>
+  <h1>Vulnerabilità Note e Mitigazioni</h1>
+
+  <table>
+    <thead><tr><th>Vulnerabilità</th><th>Livello</th><th>Mitigazione Implementata</th><th>Stato</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Intercettazione contenuto messaggi</td>
+        <td>Critico</td>
+        <td>Double Ratchet AES-256-GCM E2E — chiave unica per messaggio</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Accesso fisico dispositivo</td>
+        <td>Alto</td>
+        <td>SQLCipher + PBKDF2 100k iter. + Android KeyStore + Auto-lock</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Root / Jailbreak</td>
+        <td>Alto</td>
+        <td>SafeDevice detection — blocco avvio app</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>MITM su TLS (certificato falso)</td>
+        <td>Alto</td>
+        <td>Network Security Config (no user CA) + badCertCallback + cert pinning</td>
+        <td class="partial">Parziale — pinning da attivare post-deploy</td>
+      </tr>
+      <tr>
+        <td>Visibilità IP reale al server</td>
+        <td>Medio</td>
+        <td>WireGuard mesh — server vede solo IP mesh 10.7.x.x</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Analisi traffico operatore</td>
+        <td>Medio</td>
+        <td>WireGuard cifra tutto — indistinguibile da VPN commerciale</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Screenshot dell'app</td>
+        <td>Medio</td>
+        <td>FLAG_SECURE Android — attivo di default</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Reverse engineering APK</td>
+        <td>Medio</td>
+        <td>ProGuard R8 + Flutter obfuscation + split-debug-info</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Backup non autorizzato Android</td>
+        <td>Medio</td>
+        <td>allowBackup=false nel manifest</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Correlazione SIM → identità fisica</td>
+        <td>Basso*</td>
+        <td>Nessuna — limite fisico della rete telefonica</td>
+        <td class="partial">Limite by design</td>
+      </tr>
+      <tr>
+        <td>DDoS sul VPS</td>
+        <td>Basso</td>
+        <td>UFW + nginx rate limiting + Fail2ban</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Brute force SSH</td>
+        <td>Basso</td>
+        <td>Solo chiavi pubbliche + Fail2ban 3 tentativi → ban 24h</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="font-size:11px;color:#64748b;">* La correlazione SIM è possibile solo per un attore con accesso legale all'operatore telefonico nella giurisdizione del dispositivo. Non espone il contenuto delle comunicazioni.</p>
+
+  <div class="sdiv"></div>
+  <div class="page-footer">
+    <span>INVISIBLE — Documento Tecnico v1.0</span>
+    <span>CONFIDENZIALE — Proprietà Intellettuale dell'Autore</span>
+    <span>Stack: Flutter · Go 1.21 · WireGuard · Signal Protocol · Docker</span>
+    <span>2026</span>
+  </div>
+</div>
+
+</body>
+</html>

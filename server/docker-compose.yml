@@ -1,0 +1,172 @@
+version: '3.9'
+
+# ── Rete interna ──────────────────────────────────────────────────────────────
+networks:
+  invisible-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
+
+# ── Volumi ────────────────────────────────────────────────────────────────────
+volumes:
+  mesh-keys:        # chiavi WireGuard del server (persistenti)
+  nginx-certs:      # certificati TLS
+  relay-data:       # messaggi offline cifrati (bbolt, persistenti)
+  postgres-data:    # database PostgreSQL (ToS acceptances, audit log)
+
+# ── Servizi ───────────────────────────────────────────────────────────────────
+services:
+
+  # ── 1. Mesh Gateway (WireGuard + Auth) ──────────────────────────────────────
+  mesh-gateway:
+    build: ./mesh-gateway
+    container_name: invisible-mesh
+    restart: unless-stopped
+    # NET_ADMIN necessario per gestire interfacce WireGuard
+    cap_add:
+      - NET_ADMIN
+      - SYS_MODULE
+    sysctls:
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
+    ports:
+      - "51820:51820/udp"    # WireGuard UDP — esposto direttamente
+    volumes:
+      - mesh-keys:/etc/invisible/mesh
+    environment:
+      MESH_PORT: "8080"
+      WG_INTERFACE: "wg0"
+      WG_PORT: "51820"
+      WG_NETWORK: "10.7.0.0/16"
+      SERVER_ENDPOINT: "${VPS_IP}:51820"
+      SERVER_WG_PRIV: "${SERVER_WG_PRIV}"
+      SERVER_WG_PUB:  "${SERVER_WG_PUB}"
+      ADMIN_URL:      "http://invisible-admin:8084"
+    networks:
+      - invisible-net
+
+  # ── 2. Signaling (WebSocket WebRTC) ─────────────────────────────────────────
+  signaling:
+    build: ./signaling
+    container_name: invisible-signaling
+    restart: unless-stopped
+    environment:
+      PORT:      "8081"
+      ADMIN_URL: "http://invisible-admin:8084"
+    networks:
+      - invisible-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8081/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── 3. Relay (messaggi E2E cifrati) ─────────────────────────────────────────
+  relay:
+    build: ./relay
+    container_name: invisible-relay
+    restart: unless-stopped
+    environment:
+      PORT:          "8082"
+      MSG_TTL_HOURS: "168"
+      MSG_DB_PATH:   "/data/relay.db"
+      ADMIN_URL:     "http://invisible-admin:8084"
+    volumes:
+      - relay-data:/data
+    networks:
+      - invisible-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8082/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── 4. PostgreSQL (ToS acceptances, audit log) ───────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: invisible-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     invisible
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB:       invisible
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - invisible-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U invisible"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 5. Legal (ToS acceptance service) ────────────────────────────────────────
+  legal:
+    build: ./legal
+    container_name: invisible-legal
+    restart: unless-stopped
+    environment:
+      PORT:              "8083"
+      POSTGRES_HOST:     postgres
+      POSTGRES_USER:     invisible
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB:       invisible
+    networks:
+      - invisible-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8083/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── 6. Admin (whitelist + dashboard + error logs) ────────────────────────────
+  admin:
+    build: ./admin
+    container_name: invisible-admin
+    restart: unless-stopped
+    environment:
+      PORT:              "8084"
+      ADMIN_TOKEN:       "${ADMIN_TOKEN}"
+      POSTGRES_HOST:     postgres
+      POSTGRES_USER:     invisible
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD}"
+      POSTGRES_DB:       invisible
+    networks:
+      - invisible-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8084/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ── 7. Nginx (TLS + reverse proxy) ──────────────────────────────────────────
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: invisible-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx-certs:/etc/nginx/certs:ro
+    networks:
+      - invisible-net
+    depends_on:
+      - mesh-gateway
+      - signaling
+      - relay
+      - legal
+      - admin
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Invisible — Documento Funzionale</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 18mm 18mm 18mm 18mm; }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #050508;
+    color: #e2e8f0;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 1.75;
+    padding: 48px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  /* COVER */
+  .cover {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 60px 0;
+    border-bottom: 1px solid #1e2a45;
+    page-break-after: always;
+  }
+  .cover-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #3D6FFF;
+    margin-bottom: 24px;
+  }
+  .cover-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 64px;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .cover-subtitle {
+    font-size: 22px;
+    color: #94a3b8;
+    font-weight: 300;
+    margin-bottom: 40px;
+  }
+  .cover-meta {
+    font-size: 12px;
+    color: #475569;
+    margin-top: 48px;
+  }
+  .cover-meta span { color: #64748b; margin-right: 32px; }
+  .cover-divider {
+    width: 80px;
+    height: 3px;
+    background: linear-gradient(90deg, #3D6FFF, #7C3AED);
+    margin: 32px 0;
+    border-radius: 2px;
+  }
+  /* TYPOGRAPHY */
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 32px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 48px 0 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #1e2a45;
+  }
+  h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin: 36px 0 12px;
+  }
+  h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #3D6FFF;
+    margin: 24px 0 8px;
+    letter-spacing: 0.5px;
+  }
+  h4 {
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin: 16px 0 6px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  p { margin-bottom: 14px; color: #cbd5e1; }
+  strong { color: #e2e8f0; font-weight: 600; }
+  /* CHAPTER HEADER */
+  .chapter {
+    page-break-before: always;
+    padding-top: 12px;
+  }
+  .chapter-num {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #3D6FFF;
+    margin-bottom: 8px;
+  }
+  /* TABLES */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 12px;
+  }
+  thead tr { background: #0f1729; }
+  thead th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #3D6FFF;
+    border-bottom: 2px solid #1e2a45;
+  }
+  tbody tr { border-bottom: 1px solid #0f1729; }
+  tbody tr:nth-child(even) { background: #080b14; }
+  tbody td { padding: 10px 16px; color: #cbd5e1; }
+  tbody td:first-child { color: #e2e8f0; font-weight: 500; }
+  /* CALLOUT BOXES */
+  .callout {
+    background: #0a0f1f;
+    border-left: 3px solid #3D6FFF;
+    padding: 16px 20px;
+    margin: 20px 0;
+    border-radius: 0 8px 8px 0;
+  }
+  .callout-warn {
+    border-left-color: #f59e0b;
+  }
+  .callout-success {
+    border-left-color: #10b981;
+  }
+  .callout p { margin-bottom: 0; }
+  /* LISTS */
+  ul, ol { padding-left: 24px; margin-bottom: 14px; }
+  li { color: #cbd5e1; margin-bottom: 6px; }
+  li strong { color: #e2e8f0; }
+  /* HIGHLIGHT */
+  .highlight {
+    background: linear-gradient(135deg, #0f1f4a 0%, #0a1530 100%);
+    border: 1px solid #1e2a45;
+    border-radius: 12px;
+    padding: 24px 28px;
+    margin: 24px 0;
+  }
+  .highlight h3 { margin-top: 0; }
+  /* BADGE */
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    margin: 0 4px;
+  }
+  .badge-blue { background: #1e3a8a; color: #93c5fd; }
+  .badge-green { background: #064e3b; color: #6ee7b7; }
+  .badge-red { background: #7f1d1d; color: #fca5a5; }
+  .badge-yellow { background: #78350f; color: #fcd34d; }
+  /* FLOW */
+  .flow {
+    background: #080b14;
+    border: 1px solid #1e2a45;
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    font-family: 'Inter', monospace;
+    font-size: 12px;
+    color: #94a3b8;
+    white-space: pre-line;
+    line-height: 1.9;
+  }
+  /* TOC */
+  .toc { page-break-after: always; }
+  .toc-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: 1px dotted #1e2a45;
+    font-size: 13px;
+  }
+  .toc-item a { color: #94a3b8; text-decoration: none; }
+  .toc-item a:hover { color: #3D6FFF; }
+  .toc-section { font-weight: 600; color: #e2e8f0; margin-top: 8px; }
+  .toc-sub { padding-left: 20px; color: #64748b; font-size: 12px; }
+  /* SECTION DIVIDER */
+  .section-divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, #3D6FFF33, transparent);
+    margin: 32px 0;
+  }
+  /* COMPARISON ICONS */
+  .yes { color: #10b981; font-weight: 700; }
+  .no { color: #ef4444; font-weight: 700; }
+  .partial { color: #f59e0b; font-weight: 700; }
+  /* FOOTER */
+  .page-footer {
+    margin-top: 60px;
+    padding-top: 16px;
+    border-top: 1px solid #1e2a45;
+    font-size: 11px;
+    color: #334155;
+    display: flex;
+    justify-content: space-between;
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER PAGE -->
+<div class="cover">
+  <div class="cover-label">Documento Funzionale — Versione 1.0</div>
+  <div class="cover-title">INVISIBLE</div>
+  <div class="cover-subtitle">La comunicazione privata ridefinita.<br>Senza identità. Senza tracce. Senza compromessi.</div>
+  <div class="cover-divider"></div>
+  <p style="color:#94a3b8; max-width:520px; font-size:14px; line-height:1.8;">
+    Invisible è la prima piattaforma di comunicazione mobile che elimina radicalmente il concetto di identità digitale registrata, sostituendola con un sistema di chiavi crittografiche generate localmente sul dispositivo dell'utente.
+  </p>
+  <div class="cover-meta">
+    <span>RISERVATO</span>
+    <span>Documento Funzionale</span>
+    <span>2026</span>
+    <span>Proprietà Intellettuale dell'Autore</span>
+  </div>
+</div>
+
+<!-- TABLE OF CONTENTS -->
+<div class="toc">
+  <h1 style="page-break-before:avoid">Indice</h1>
+  <div class="toc-item toc-section"><a href="#cap1">1. Executive Summary</a></div>
+  <div class="toc-item toc-section"><a href="#cap2">2. Introduzione e Visione del Prodotto</a></div>
+  <div class="toc-item toc-sub"><a href="#cap2">2.1 Il Problema Fondamentale</a></div>
+  <div class="toc-item toc-sub"><a href="#cap2">2.2 La Risposta: Invisible</a></div>
+  <div class="toc-item toc-section"><a href="#cap3">3. Il Mercato delle Comunicazioni Sicure</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.1 Limiti delle Soluzioni Esistenti</a></div>
+  <div class="toc-item toc-sub"><a href="#cap3">3.2 Il Gap di Mercato</a></div>
+  <div class="toc-item toc-section"><a href="#cap4">4. Funzionalità dell'Applicazione</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.1 Gestione Identità e Profili</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.2 Messaggistica Cifrata</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.3 Chiamate Audio e Video</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.4 Gestione Contatti</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.5 Sicurezza e Privacy Avanzata</a></div>
+  <div class="toc-item toc-section"><a href="#cap5">5. Flussi Utente</a></div>
+  <div class="toc-item toc-section"><a href="#cap6">6. Architettura di Sicurezza</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.1 I Tre Layer di Protezione Sovrapposti</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.2 Protezione del Dispositivo</a></div>
+  <div class="toc-item toc-sub"><a href="#cap6">6.3 Protezione dei Metadati</a></div>
+  <div class="toc-item toc-section"><a href="#cap7">7. Il Multiprofilo — Innovazione Esclusiva</a></div>
+  <div class="toc-item toc-section"><a href="#cap8">8. Confronto con la Concorrenza</a></div>
+  <div class="toc-item toc-section"><a href="#cap9">9. Perché Invisible è Superiore</a></div>
+  <div class="toc-item toc-section"><a href="#cap10">10. Casi d'Uso e Target di Mercato</a></div>
+  <div class="toc-item toc-section"><a href="#cap11">11. Elementi di Novità e Brevettabilità</a></div>
+  <div class="toc-item toc-section"><a href="#cap12">12. Glossario</a></div>
+</div>
+
+<!-- CAPITOLO 1: EXECUTIVE SUMMARY -->
+<div class="chapter" id="cap1">
+  <div class="chapter-num">Capitolo 1</div>
+  <h1>Executive Summary</h1>
+
+  <div class="highlight">
+    <h3>Invisible in tre concetti</h3>
+    <p><strong>Nessuna identità registrata.</strong> Nessun numero di telefono, email o username. L'identità dell'utente è una coppia di chiavi crittografiche generata localmente sul dispositivo, che non lascia mai il dispositivo stesso.</p>
+    <p><strong>Nessuna traccia dei metadati.</strong> Grazie alla rete mesh WireGuard, gli indirizzi IP reali non sono mai visibili né al server né ai destinatari. Il server non sa chi sta comunicando con chi.</p>
+    <p><strong>Nessun accesso al contenuto.</strong> Ogni messaggio e ogni chiamata è protetta dal protocollo Signal (X3DH + Double Ratchet), lo stesso utilizzato da Signal e WhatsApp. Il server trasporta solo dati cifrati opachi che non può leggere.</p>
+  </div>
+
+  <p>Invisible è un'applicazione mobile per Android e iOS che risolve il problema fondamentale di tutte le piattaforme di comunicazione esistenti: l'obbligo di rivelare la propria identità per comunicare in modo sicuro.</p>
+
+  <p>WhatsApp richiede il numero di telefono. Signal richiede il numero di telefono. Telegram richiede il numero di telefono. In tutti i casi, il numero di telefono è tracciabile all'operatore e, tramite l'operatore, alla persona fisica. Questo rende impossibile una comunicazione genuinamente anonima con questi strumenti.</p>
+
+  <p>Invisible elimina questo vincolo alla radice: l'identità dell'utente è una coppia di chiavi crittografiche (Ed25519/X25519) generata localmente sul dispositivo al momento della prima installazione. Nessun server la conosce. Nessun database la contiene. L'utente esiste sulla rete Invisible esclusivamente come una sequenza di byte crittografici, non associabili ad alcuna identità reale senza accesso fisico al dispositivo.</p>
+
+  <p>A questo si aggiunge un'infrastruttura di rete innovativa basata su WireGuard mesh VPN che nasconde gli indirizzi IP reali dei dispositivi, e tre livelli di cifratura sovrapposti che rendono il contenuto delle comunicazioni inaccessibile a qualsiasi terza parte, incluso il gestore dell'infrastruttura server.</p>
+
+  <h2>Punti chiave del prodotto</h2>
+  <ul>
+    <li><strong>Prima piattaforma di messaggistica commerciale senza identità registrata</strong> — nessun numero, email o dato personale richiesto</li>
+    <li><strong>Tre layer di cifratura sovrapposti</strong> — WireGuard (rete) + TLS 1.3 (trasporto) + Signal Protocol E2E (contenuto)</li>
+    <li><strong>Rete mesh VPN integrata</strong> — gli IP reali non sono mai visibili al server né ai destinatari</li>
+    <li><strong>Multiprofilo con isolamento crittografico</strong> — identità completamente separate sullo stesso dispositivo</li>
+    <li><strong>Panic button</strong> — cancellazione crittografica immediata di tutta l'identità e i dati</li>
+    <li><strong>Database locale cifrato</strong> — SQLCipher AES-256, inaccessibile senza PIN</li>
+    <li><strong>Infrastruttura privata</strong> — nessuna dipendenza da server di terze parti (Meta, Google, Signal Foundation)</li>
+    <li><strong>Chiamate audio e video P2P</strong> — il traffico media non transita mai dal server</li>
+  </ul>
+</div>
+
+<!-- CAPITOLO 2: INTRODUZIONE E VISIONE -->
+<div class="chapter" id="cap2">
+  <div class="chapter-num">Capitolo 2</div>
+  <h1>Introduzione e Visione del Prodotto</h1>
+
+  <h2>2.1 Il Problema Fondamentale</h2>
+
+  <p>Nell'era della comunicazione digitale, la privacy è diventata una contraddizione in termini. Le piattaforme che promettono comunicazioni sicure sono le stesse che raccolgono, conservano e potenzialmente cedono i metadati delle comunicazioni: chi parla con chi, quando, per quanto tempo, da dove.</p>
+
+  <p>Il problema non è solo tecnico ma strutturale. Per utilizzare qualsiasi piattaforma di messaggistica moderna è necessario fornire un identificatore personale verificabile — tipicamente il numero di telefono — che diventa il punto di connessione tra l'identità digitale e quella fisica. Questo identificatore:</p>
+
+  <ul>
+    <li>È registrato presso un operatore telefonico soggetto a obblighi di legge</li>
+    <li>Permette la ricostruzione dell'identità fisica tramite richiesta legale</li>
+    <li>Espone l'utente a correlazioni tra account su diverse piattaforme</li>
+    <li>Sopravvive alla cancellazione dell'account nella memoria dell'operatore</li>
+    <li>Non può essere genuinamente anonimizzato una volta associato a un dispositivo fisico</li>
+  </ul>
+
+  <p>Anche Signal — la piattaforma considerata più sicura a livello crittografico — richiede un numero di telefono e gestisce i propri server centralizzati. Il contenuto dei messaggi è protetto, ma i metadati (chi comunica con chi) sono visibili alla Signal Foundation.</p>
+
+  <h2>2.2 La Risposta: Invisible</h2>
+
+  <p>Invisible è stata progettata rispondendo a una domanda precisa: <strong>è possibile comunicare in modo sicuro senza mai rivelare la propria identità, nemmeno all'infrastruttura che trasporta i messaggi?</strong></p>
+
+  <p>La risposta è sì, ed è ottenuta combinando tre tecnologie in un'architettura inedita:</p>
+
+  <div class="flow">1. IDENTITÀ CRITTOGRAFICA LOCALE
+   → Nessun server conosce la tua identità reale
+   → Le chiavi nascono e muoiono sul tuo dispositivo
+   → Il contatto avviene tramite scambio QR diretto (peer-to-peer)
+
+2. RETE MESH WIREGUARD
+   → Il tuo IP reale non è mai visibile al server né ai destinatari
+   → Il traffico è cifrato prima ancora di uscire dal dispositivo
+   → Indistinguibile da qualsiasi traffico VPN commerciale
+
+3. SIGNAL PROTOCOL END-TO-END
+   → Ogni messaggio ha una chiave diversa, generata e poi distrutta
+   → Il server trasporta solo dati cifrati che non può decifrare
+   → Forward secrecy: compromettere oggi non espone il passato</div>
+
+  <h2>2.3 La Visione a Lungo Termine</h2>
+
+  <p>Invisible non è solo un'applicazione di messaggistica: è un'infrastruttura di comunicazione privata che può essere installata e gestita in autonomia da organizzazioni, aziende, governi o individui che necessitano di comunicazioni certificate come inaccessibili a terze parti.</p>
+
+  <p>La filosofia del prodotto è che la privacy non debba essere un'opzione avanzata riservata a esperti di sicurezza informatica, ma uno standard di base per qualsiasi comunicazione digitale.</p>
+</div>
+
+<!-- CAPITOLO 3: IL MERCATO -->
+<div class="chapter" id="cap3">
+  <div class="chapter-num">Capitolo 3</div>
+  <h1>Il Mercato delle Comunicazioni Sicure</h1>
+
+  <h2>3.1 Limiti delle Soluzioni Esistenti</h2>
+
+  <h3>WhatsApp (Meta)</h3>
+  <p>WhatsApp utilizza il protocollo Signal per cifrare il contenuto dei messaggi, ma questo è l'unica concessione alla privacy. L'applicazione raccoglie sistematicamente i metadati delle comunicazioni e li condivide con l'ecosistema Meta (Facebook, Instagram). Richiede numero di telefono, espone l'IP all'infrastruttura Meta, e i backup cloud (Google Drive, iCloud) non sono coperti dalla cifratura E2E per default. Meta è soggetta alla legislazione americana FISA/CLOUD Act che obbliga alla collaborazione con le agenzie federali USA.</p>
+
+  <h3>Signal</h3>
+  <p>Signal è la piattaforma più solida a livello crittografico tra quelle mainstream. Il protocollo crittografico è eccellente e il codice è open source e auditato. Tuttavia, Signal richiede un numero di telefono, gestisce server centralizzati (Signal Foundation), e il Sealed Sender — pur nascondendo il mittente — non garantisce l'anonimato dei metadati relazionali. Sotto pressione legale, Signal ha fornito metadati alle autorità (casi documentati 2016, 2021).</p>
+
+  <h3>Telegram</h3>
+  <p>Telegram ha un approccio alla sicurezza profondamente problematico. La cifratura E2E è disponibile solo nelle "chat segrete" — non nelle chat normali né nei gruppi. Il protocollo MTProto è proprietario e non auditato indipendentemente. I server di Telegram possono leggere il contenuto di tutte le comunicazioni non segrete. Telegram è stato più volte al centro di controversie per la consegna di dati agli stati.</p>
+
+  <h3>iMessage / FaceTime (Apple)</h3>
+  <p>Disponibile solo su dispositivi Apple. I backup iCloud senza Advanced Data Protection espongono le chiavi ad Apple. Non c'è cross-platform, nessuna possibilità di infrastruttura privata, dipendenza totale dall'ecosistema Apple.</p>
+
+  <h2>3.2 Il Gap di Mercato</h2>
+
+  <p>Nessuna delle soluzioni esistenti combina simultaneamente:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Requisito</th>
+        <th>WhatsApp</th>
+        <th>Signal</th>
+        <th>Telegram</th>
+        <th>Invisible</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Nessun numero di telefono richiesto</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>IP reale nascosto al server</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Metadati non visibili al gestore</td>
+        <td class="no">✗</td>
+        <td class="partial">~</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Infrastruttura privata installabile</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Multiprofilo isolato crittograficamente</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Panic button con wipe crittografico</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Chiamate video E2E P2P</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+        <td class="partial">~</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Cifratura E2E di default su tutti i messaggi</td>
+        <td class="yes">✓</td>
+        <td class="yes">✓</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Nessuna dipendenza da server terzi</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-success">
+    <p><strong>Invisible è l'unica piattaforma che soddisfa tutti i requisiti simultaneamente.</strong> Questo non è un miglioramento incrementale: è una categoria di prodotto nuova.</p>
+  </div>
+
+  <h2>3.3 Target di Mercato</h2>
+  <p>Il mercato si articola in due segmenti principali:</p>
+  <ul>
+    <li><strong>Enterprise / Professionale</strong> — aziende, studi legali, società di consulenza, giornalisti, organizzazioni internazionali, forze dell'ordine, aziende farmaceutiche, banche d'investimento</li>
+    <li><strong>Privato high-value</strong> — persone con necessità di privacy elevata, attivisti, politici, dirigenti, personalità pubbliche</li>
+  </ul>
+</div>
+
+<!-- CAPITOLO 4: FUNZIONALITÀ -->
+<div class="chapter" id="cap4">
+  <div class="chapter-num">Capitolo 4</div>
+  <h1>Funzionalità dell'Applicazione</h1>
+
+  <h2>4.1 Gestione Identità e Profili Multipli</h2>
+
+  <h3>Creazione identità crittografica</h3>
+  <p>Al primo avvio, Invisible genera automaticamente una coppia di chiavi crittografiche direttamente sul dispositivo dell'utente. Non viene trasmessa nessuna informazione a nessun server durante questo processo. L'utente sceglie un nome visualizzato (puramente locale, non associato a nessuna verifica d'identità) e un PIN di accesso.</p>
+
+  <h3>Multiprofilo con isolamento totale</h3>
+  <p>Invisible supporta la gestione di profili multipli sullo stesso dispositivo. Ogni profilo ha:</p>
+  <ul>
+    <li>Proprie chiavi crittografiche indipendenti (nessuna relazione matematica tra profili)</li>
+    <li>Database cifrato separato e indipendente</li>
+    <li>Lista contatti separata</li>
+    <li>Impostazioni di privacy separate</li>
+    <li>Sessioni crittografiche separate per ogni conversazione</li>
+  </ul>
+  <p>Il passaggio da un profilo all'altro richiede l'autenticazione con il PIN del profilo di destinazione. Non esiste alcun modo tecnico per correlare i profili tra loro dall'esterno del dispositivo.</p>
+
+  <h3>QR Code di identità</h3>
+  <p>Ogni profilo genera un QR code che codifica le chiavi pubbliche dell'utente (Master Key X25519 + Identity Key Ed25519 + Signed Pre-Key). Questo QR code è l'unico meccanismo di aggiunta contatti. Può essere mostrato sullo schermo, condiviso come immagine o come stringa di testo cifrata.</p>
+
+  <h2>4.2 Messaggistica Cifrata</h2>
+
+  <h3>Cifratura end-to-end di ogni messaggio</h3>
+  <p>Ogni singolo messaggio è cifrato con una chiave unica, generata in modo deterministico dal protocollo Double Ratchet e immediatamente distrutta dopo l'uso. Non esiste una chiave master che decifra la conversazione: ogni messaggio è crittograficamente indipendente da tutti gli altri.</p>
+
+  <h3>Tipologie di messaggi supportati</h3>
+  <ul>
+    <li><strong>Testo</strong> — messaggi di testo con supporto emoji completo</li>
+    <li><strong>Immagini e file</strong> — allegati importati dalla galleria del dispositivo, cifrati separatamente prima di essere inclusi nel payload del messaggio</li>
+    <li><strong>Read receipts</strong> — conferma di lettura (blu = letto) cifrata come qualsiasi altro messaggio</li>
+    <li><strong>Separatori di data</strong> — visualizzazione organizzata per data nella chat</li>
+  </ul>
+
+  <h3>Principio di non persistenza del testo in chiaro</h3>
+  <p>Il testo decifrato dei messaggi non viene mai scritto su disco. Il database SQLCipher conserva solo il ciphertext (testo cifrato). La decifrazione avviene in memoria RAM al momento della visualizzazione, con cache in memoria di massimo 5 minuti. Al termine della sessione, la cache viene azzerata.</p>
+
+  <h3>Messaggi a scadenza automatica</h3>
+  <p>L'utente può configurare la cancellazione automatica dei messaggi più vecchi di un certo numero di giorni (1, 7, 30, 90 giorni). La cancellazione è definitiva e non recuperabile.</p>
+
+  <h2>4.3 Chiamate Audio e Video</h2>
+
+  <h3>Tecnologia WebRTC P2P</h3>
+  <p>Le chiamate audio e video utilizzano WebRTC in modalità peer-to-peer diretta. Il traffico media (audio e video) non transita mai attraverso i server di Invisible: viaggia direttamente tra i dispositivi dei partecipanti, cifrato end-to-end dalla specifica SRTP/DTLS di WebRTC.</p>
+
+  <h3>Segnalazione cifrata</h3>
+  <p>Il processo di negoziazione della chiamata (scambio SDP/ICE) avviene tramite il microservizio di signaling, che trasporta i parametri di connessione in forma cifrata. Il server non può interpretare il contenuto dello scambio di segnalazione.</p>
+
+  <h3>Rete mesh per la negoziazione ICE</h3>
+  <p>Grazie alla rete mesh WireGuard, gli indirizzi IP reali dei dispositivi non sono mai esposti durante la negoziazione ICE (Internet Connectivity Establishment). I candidati ICE contengono solo indirizzi IP della rete mesh (10.7.x.x), non gli IP reali dei dispositivi.</p>
+
+  <h2>4.4 Gestione Contatti</h2>
+
+  <h3>Aggiunta contatti via QR</h3>
+  <p>L'unico modo per aggiungere un contatto è scansionare il suo QR code (o incollare la stringa corrispondente). Non esiste una rubrica centralizzata, un meccanismo di ricerca per nome, o qualsiasi forma di discovery automatica dei contatti. Questo garantisce che nessun server conosca la rete sociale dell'utente.</p>
+
+  <h3>Verifica dell'identità</h3>
+  <p>Il sistema verifica crittograficamente l'autenticità di ogni contatto verificando la firma Ed25519 sulla Signed Pre-Key. Un badge verde "Verificato" è mostrato nei contatti la cui identità è stata verificata crittograficamente.</p>
+
+  <h3>Gestione presenza</h3>
+  <p>Un indicatore di presenza (dot verde) mostra la disponibilità online dei contatti tramite la rete mesh. Anche questo dato è visibile solo a chi è già nella rete mesh del profilo.</p>
+
+  <h2>4.5 Sicurezza e Privacy Avanzata</h2>
+
+  <h3>Prevenzione screenshot</h3>
+  <p>Di default, Invisible attiva il flag di sistema <code>FLAG_SECURE</code> su Android, che impedisce la cattura di screenshot e la visualizzazione dell'app nelle anteprime del multitasking. Configurabile dall'utente nelle impostazioni.</p>
+
+  <h3>Auto-lock</h3>
+  <p>L'applicazione si blocca automaticamente dopo un periodo configurabile di inattività (1, 5, 10, 30 minuti o mai). Al blocco, viene effettuato il logout dal profilo corrente e la cache in memoria viene azzerata. L'accesso richiede il PIN.</p>
+
+  <h3>Rilevamento root e jailbreak</h3>
+  <p>All'avvio, Invisible verifica l'integrità del dispositivo. Se rileva che il dispositivo è stato modificato (root Android, jailbreak iOS), che è un emulatore, o che le opzioni sviluppatore sono attive, l'applicazione blocca l'avvio mostrando un avviso di sicurezza. Questo impedisce l'esecuzione su dispositivi potenzialmente compromessi.</p>
+
+  <h3>Panic Button</h3>
+  <p>Un pulsante di emergenza accessibile dalle impostazioni consente la cancellazione crittografica immediata di:</p>
+  <ul>
+    <li>Tutte le chiavi crittografiche del profilo</li>
+    <li>L'intero database cifrato (messaggi, contatti, sessioni)</li>
+    <li>Tutte le impostazioni e i dati locali dell'app</li>
+  </ul>
+  <p>Dopo l'attivazione del panic button, l'applicazione si presenta come nuova installazione, senza alcuna traccia del profilo precedente.</p>
+
+  <h3>Protezione backup</h3>
+  <p>Il backup automatico di Android (Google Backup) è disabilitato a livello di manifest dell'applicazione. I dati di Invisible non vengono mai caricati su Google Drive o iCloud tramite i meccanismi standard di backup del sistema operativo.</p>
+</div>
+
+<!-- CAPITOLO 5: FLUSSI UTENTE -->
+<div class="chapter" id="cap5">
+  <div class="chapter-num">Capitolo 5</div>
+  <h1>Flussi Utente</h1>
+
+  <h2>5.1 Prima Installazione e Creazione Profilo</h2>
+  <div class="flow">UTENTE                              INVISIBLE APP                      SERVER
+   │                                    │                                  │
+   ├─ Installa l'app ──────────────────►│                                  │
+   │                                    ├─ Verifica integrità dispositivo  │
+   │                                    │  (root? emulatore? dev options?) │
+   │◄── Schermata Welcome ──────────────┤                                  │
+   ├─ Tocca "Crea Profilo" ────────────►│                                  │
+   │                                    ├─ Genera chiavi localmente:       │
+   │                                    │  • Ed25519 Identity Key          │
+   │                                    │  • X25519 Master Key             │
+   │                                    │  • X25519 Signed Pre-Key         │
+   │                                    │  • Firma SPK con Identity Key    │
+   │                                    │  (NESSUNA comunicazione server)  │
+   ├─ Inserisce nome e PIN ────────────►│                                  │
+   │                                    ├─ Cifra chiavi private con PIN    │
+   │                                    ├─ Salva in Android KeyStore       │
+   │                                    ├─ Registra IP mesh ──────────────►│
+   │                                    │                     ◄── IP mesh  │
+   │◄── HomeScreen ─────────────────────┤                                  │</div>
+
+  <h2>5.2 Aggiunta Contatto via QR</h2>
+  <div class="flow">UTENTE A                            APP A                    APP B                  UTENTE B
+   │                                    │                        │                      │
+   │                                    │◄── Mostra QR ──────────┤◄── tocca "QR" ───────┤
+   ├─ Tocca "Aggiungi Contatto" ───────►│                        │                      │
+   ├─ Scansiona QR di B ───────────────►│                        │                      │
+   │                                    ├─ Estrae chiavi di B    │                      │
+   │                                    ├─ Verifica firma SPK    │                      │
+   │                                    │  con Identity Key di B │                      │
+   │                                    ├─ Salva contatto        │                      │
+   │◄── Contatto aggiunto ──────────────┤                        │                      │
+   │   (Nessun server coinvolto)        │                        │                      │</div>
+
+  <h2>5.3 Invio del Primo Messaggio (con X3DH)</h2>
+  <div class="flow">MITTENTE A                          APP A                    SERVER RELAY             DESTINATARIO B
+   │                                    │                        │                      │
+   ├─ Apre chat con B ─────────────────►│                        │                      │
+   │                                    ├─ X3DH: calcola         │                      │
+   │                                    │  shared secret con     │                      │
+   │                                    │  chiavi pubbliche di B │                      │
+   │                                    ├─ Deriva Root Key       │                      │
+   │                                    ├─ Deriva Chain Keys     │                      │
+   ├─ Scrive messaggio ────────────────►│                        │                      │
+   │                                    ├─ Deriva Message Key    │                      │
+   │                                    ├─ Cifra con AES-256-GCM │                      │
+   │                                    ├─ Distrugge Message Key │                      │
+   │                                    ├─ Invia ciphertext ────►│                      │
+   │                                    │                        ├─ Consegna ──────────►│
+   │                                    │                        │            ├─ Decifra │
+   │                                    │                        │            │ messaggio│
+   │◄── ✓ consegnato ───────────────────┤                        │◄── receipt─┤          │</div>
+
+  <h2>5.4 Avvio Chiamata Video</h2>
+  <div class="flow">CHIAMANTE A                         APP A           SIGNALING SERVER         RICEVENTE B
+   │                                    │                   │                        │
+   ├─ Tocca icona video ───────────────►│                   │                        │
+   │                                    ├─ Crea offerta SDP │                        │
+   │                                    ├─ Invia SDP ──────►│                        │
+   │                                    │                   ├─ Instrada a B ────────►│
+   │                                    │                   │            ├─ Suona    │
+   │                                    │                   │◄── SDP ans─┤           │
+   │                                    │◄── risposta ──────┤            │           │
+   │                                    ├─ Scambio ICE candidati (via mesh IP) ─────►│
+   │                                    │                   │                        │
+   │     ◄──────────────────────────────────────── WebRTC P2P DIRETTO ──────────────►│
+   │           (traffico video/audio: non passa dal server, cifrato SRTP/DTLS)        │</div>
+
+  <h2>5.5 Cambio Profilo</h2>
+  <div class="flow">UTENTE                              APP
+   │                                    │
+   ├─ Tocca menu profili ──────────────►│
+   │◄── Lista profili (solo nomi) ──────┤
+   ├─ Seleziona profilo 2 ─────────────►│
+   │◄── Richiesta PIN profilo 2 ────────┤
+   ├─ Inserisce PIN ───────────────────►│
+   │                                    ├─ Azzeramento cache profilo 1
+   │                                    ├─ Carica database profilo 2 (separato)
+   │                                    ├─ Decifra chiavi profilo 2 con PIN
+   │◄── HomeScreen profilo 2 ───────────┤</div>
+
+  <h2>5.6 Attivazione Panic Button</h2>
+  <div class="flow">UTENTE                              APP
+   │                                    │
+   ├─ Impostazioni → Zona Pericolo ────►│
+   ├─ Tocca "Panic Button" ────────────►│
+   │◄── Doppia conferma ────────────────┤
+   ├─ Conferma ────────────────────────►│
+   │                                    ├─ Sovrascrive chiavi con dati random
+   │                                    ├─ Elimina database SQLCipher
+   │                                    ├─ Cancella SharedPreferences
+   │                                    ├─ Cancella Flutter Secure Storage
+   │                                    ├─ Rimuove configurazione WireGuard
+   │◄── App come nuova installazione ───┤</div>
+</div>
+
+<!-- CAPITOLO 6: ARCHITETTURA DI SICUREZZA -->
+<div class="chapter" id="cap6">
+  <div class="chapter-num">Capitolo 6</div>
+  <h1>Architettura di Sicurezza</h1>
+
+  <h2>6.1 I Tre Layer di Protezione Sovrapposti</h2>
+
+  <p>Invisible implementa tre layer di cifratura indipendenti e sovrapposti. Anche se uno dei layer venisse compromesso — evento tecnicamente improbabile allo stato dell'arte — gli altri due rimarrebbero intatti.</p>
+
+  <div class="highlight">
+    <h3>Layer 1 — WireGuard (Rete)</h3>
+    <p>Prima ancora che un byte lasci il dispositivo, WireGuard cifra tutto il traffico con crittografia AES-256-GCM. Il traffico che l'operatore telefonico vede è pacchetti UDP cifrati verso un IP (il VPS). Il contenuto è completamente illeggibile. L'IP reale del mittente non è mai visibile alla destinazione.</p>
+
+    <h3>Layer 2 — TLS 1.3 (Trasporto)</h3>
+    <p>All'interno del tunnel WireGuard, le connessioni al server usano TLS 1.3 con certificato RSA-4096 verificato. È il protocollo che protegge ogni connessione bancaria online. Anche se WireGuard fosse assente, il contenuto sarebbe comunque protetto da TLS. Due cifrature sono sempre meglio di una.</p>
+
+    <h3>Layer 3 — Signal Protocol E2E (Contenuto)</h3>
+    <p>All'interno di TLS, il payload è già cifrato con il protocollo Signal (X3DH + Double Ratchet). Il server non può decifrare il contenuto anche volendo — non ha le chiavi. Solo il dispositivo del destinatario può decifrarli. Ogni messaggio usa una chiave diversa, generata e poi distrutta immediatamente.</p>
+  </div>
+
+  <div class="flow">COSA VEDE OGNI ATTORE:
+
+Operatore telefonico:
+  "Pacchetti UDP cifrati verso IP x.x.x.x — indistinguibili da traffico VPN"
+
+Server Invisible (relay):
+  "Ciphertext opaco — non so cosa contiene né chi sono mittente e destinatario reali"
+
+Intercettatore rete:
+  "Rumore casuale cifrato WireGuard + TLS — matematicamente indecifrabile"
+
+Chiunque altro:
+  "Nulla — il contenuto non è mai esistito in chiaro fuori dai dispositivi"</div>
+
+  <h2>6.2 Protezione del Dispositivo</h2>
+
+  <h3>Database cifrato (SQLCipher)</h3>
+  <p>Tutti i dati locali — messaggi (cifrati), contatti, sessioni crittografiche — sono archiviati in un database SQLCipher cifrato con AES-256-GCM. La chiave di cifratura è derivata dal PIN dell'utente tramite PBKDF2 con 100.000 iterazioni di hashing. Senza il PIN corretto, il database è indistinguibile da dati casuali.</p>
+
+  <h3>Chiavi private in Secure Enclave</h3>
+  <p>Le chiavi private crittografiche sono conservate nell'Android Keystore (o nel Keychain di iOS), un'area hardware sicura del chip del dispositivo. Queste chiavi non lasciano mai il chip sicuro e non sono accessibili ad altre applicazioni, nemmeno con privilegi di root.</p>
+
+  <h3>Prevenzione del dump della RAM</h3>
+  <p>Il testo decifrato dei messaggi esiste in RAM solo per il tempo necessario alla visualizzazione (massimo 5 minuti in cache), dopodiché viene rimosso dalla memoria. Il dump della memoria del processo non rivela messaggi significativi.</p>
+
+  <h2>6.3 Protezione dei Metadati</h2>
+
+  <p>I metadati delle comunicazioni — chi parla con chi, quando, per quanto tempo — sono spesso più preziosi del contenuto stesso per chi effettua sorveglianza. Invisible protegge i metadati a due livelli:</p>
+
+  <ul>
+    <li><strong>Rete mesh WireGuard</strong> — il server relay vede solo indirizzi IP della rete mesh interna (10.7.x.x), non gli IP reali. Non sa a quale persona corrisponde l'indirizzo 10.7.0.5.</li>
+    <li><strong>Nessuna rubrica server</strong> — i contatti esistono solo localmente sul dispositivo. Non esiste una rubrica centralizzata che mappa identità crittografiche a persone reali.</li>
+    <li><strong>Nessun log applicativo</strong> — il server è configurato per non scrivere log identificativi delle comunicazioni.</li>
+  </ul>
+
+  <h2>6.4 Cosa Rimane Visibile</h2>
+
+  <div class="callout callout-warn">
+    <p><strong>Trasparenza tecnica:</strong> L'operatore telefonico sa che un dispositivo si connette a un determinato IP (il VPS). Non conosce il contenuto della comunicazione né i destinatari. Con un'ordinanza giudiziaria, l'operatore potrebbe associare l'IP del dispositivo alla SIM. Questo limite è comune a qualsiasi VPN o app di messaggistica — non è una debolezza specifica di Invisible, ma un limite fisico della rete telefonica.</p>
+  </div>
+</div>
+
+<!-- CAPITOLO 7: MULTIPROFILO -->
+<div class="chapter" id="cap7">
+  <div class="chapter-num">Capitolo 7</div>
+  <h1>Il Multiprofilo — Innovazione Esclusiva</h1>
+
+  <p>Nessuna piattaforma di messaggistica esistente implementa il multiprofilo con isolamento crittografico completo. Questa funzionalità è una delle innovazioni principali di Invisible ed è uno degli elementi più significativi per una potenziale protezione brevettuale.</p>
+
+  <h2>7.1 Cos'è il Multiprofilo</h2>
+  <p>Il multiprofilo permette di mantenere sullo stesso dispositivo fisico più identità crittografiche completamente separate e indipendenti. Ogni profilo è, a tutti gli effetti, come avere un'installazione separata dell'applicazione.</p>
+
+  <h2>7.2 Isolamento Tecnico</h2>
+  <table>
+    <thead><tr><th>Componente</th><th>Isolamento</th></tr></thead>
+    <tbody>
+      <tr><td>Chiavi crittografiche</td><td>Separate, generate indipendentemente, nessuna relazione matematica</td></tr>
+      <tr><td>Database SQLCipher</td><td>File fisicamente separati, chiavi di cifratura diverse</td></tr>
+      <tr><td>Lista contatti</td><td>Separata per profilo, non condivisa</td></tr>
+      <tr><td>Messaggi</td><td>Separati per profilo, non accessibili da altri profili</td></tr>
+      <tr><td>Sessioni crittografiche</td><td>Separate, indipendenti</td></tr>
+      <tr><td>Impostazioni privacy</td><td>Separate (screenshot, auto-lock, scadenza messaggi)</td></tr>
+      <tr><td>IP mesh WireGuard</td><td>Separato per profilo</td></tr>
+      <tr><td>Autenticazione</td><td>PIN separato per profilo</td></tr>
+    </tbody>
+  </table>
+
+  <h2>7.3 Casi d'Uso del Multiprofilo</h2>
+  <ul>
+    <li><strong>Separazione vita professionale/personale</strong> — un profilo per comunicazioni di lavoro, uno per comunicazioni private, con impossibilità di correlazione dall'esterno</li>
+    <li><strong>Giornalismo investigativo</strong> — profili separati per diverse inchieste, protezione delle fonti in caso di sequestro del dispositivo (un profilo compromesso non espone gli altri)</li>
+    <li><strong>Gestione organizzativa</strong> — un'organizzazione può distribuire profili dedicati a diversi reparti o progetti, mantenendo comunicazioni separate</li>
+    <li><strong>Protezione avanzata</strong> — in caso di pressione per rivelare comunicazioni, solo il profilo noto all'attaccante è esposto</li>
+  </ul>
+
+  <h2>7.4 Come si Passa da un Profilo all'Altro</h2>
+  <p>Il passaggio tra profili avviene tramite selezione dalla schermata dei profili e autenticazione con il PIN del profilo di destinazione. Al cambio profilo, la cache in memoria del profilo precedente viene immediatamente azzerata. La transizione richiede 1-2 secondi.</p>
+</div>
+
+<!-- CAPITOLO 8: CONFRONTO CONCORRENZA -->
+<div class="chapter" id="cap8">
+  <div class="chapter-num">Capitolo 8</div>
+  <h1>Confronto Dettagliato con la Concorrenza</h1>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Caratteristica</th>
+        <th>WhatsApp</th>
+        <th>Signal</th>
+        <th>Telegram</th>
+        <th>iMessage</th>
+        <th>Invisible</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Richiede numero di telefono</td>
+        <td class="no">Sì</td>
+        <td class="no">Sì</td>
+        <td class="no">Sì</td>
+        <td class="no">Sì (Apple ID)</td>
+        <td class="yes">No</td>
+      </tr>
+      <tr>
+        <td>Protocollo crittografico</td>
+        <td>Signal Protocol</td>
+        <td>Signal Protocol</td>
+        <td>MTProto 2.0</td>
+        <td>IDS proprietario</td>
+        <td class="yes">Signal Protocol</td>
+      </tr>
+      <tr>
+        <td>E2E di default su tutti i messaggi</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="no">No (solo segreti)</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>IP reale nascosto al server</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì (mesh VPN)</td>
+      </tr>
+      <tr>
+        <td>Metadati relazionali nascosti</td>
+        <td class="no">No</td>
+        <td class="partial">Parziale</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Infrastruttura auto-ospitata</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Multiprofilo isolato</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Panic button</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Chiamate video E2E</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="partial">Parziale</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì (P2P)</td>
+      </tr>
+      <tr>
+        <td>Scambio contatti senza server</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì (QR locale)</td>
+      </tr>
+      <tr>
+        <td>Messaggi a scadenza automatica</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Dipendenza da terze parti</td>
+        <td class="no">Meta</td>
+        <td class="no">Signal Foundation</td>
+        <td class="no">Telegram</td>
+        <td class="no">Apple</td>
+        <td class="yes">Nessuna</td>
+      </tr>
+      <tr>
+        <td>Cross-platform</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="yes">Sì</td>
+        <td class="no">Solo Apple</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Anti-screenshot nativo</td>
+        <td class="partial">Parziale</td>
+        <td class="yes">Sì</td>
+        <td class="partial">Parziale</td>
+        <td class="no">No</td>
+        <td class="yes">Sì (configurabile)</td>
+      </tr>
+      <tr>
+        <td>Rilevamento root/jailbreak</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Backup automatico disabilitato</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- CAPITOLO 9: PERCHÉ INVISIBLE È SUPERIORE -->
+<div class="chapter" id="cap9">
+  <div class="chapter-num">Capitolo 9</div>
+  <h1>Perché Invisible è Superiore</h1>
+
+  <h2>9.1 L'Identità Crittografica: la Differenza Radicale</h2>
+  <p>Tutte le piattaforme esistenti risolvono il problema "come faccio a trovare i miei contatti?" con una risposta centralizzata: un server che mappa numeri di telefono o username a chiavi crittografiche. Questo server diventa per definizione un punto di vulnerabilità: può essere hackerato, può ricevere ordini giudiziari, può essere acquisito da terzi con interessi diversi.</p>
+  <p>Invisible risolve questo problema eliminandolo alla radice: non esiste un server di mapping identità. I contatti si scambiano le chiavi pubbliche direttamente, di persona o tramite canali privati. Il server non sa chi sei.</p>
+
+  <h2>9.2 La Rete Mesh: Protezione dei Metadati</h2>
+  <p>Signal è crittograficamente eccellente ma il suo server sa quando sei online, con quali IP ti connetti, e — nonostante il Sealed Sender — può fare analisi statistiche sul traffico. WhatsApp fornisce metadati completi a Meta.</p>
+  <p>Invisible introduce un layer che nessuna piattaforma mainstream ha: una rete mesh VPN integrata che maschera gli IP reali anche a livello di infrastruttura server. Il relay vede solo IP interni (10.7.x.x). Non può costruire un grafo delle relazioni sociali basato sugli IP.</p>
+
+  <h2>9.3 L'Infrastruttura Privata: Nessun Terzo di Fiducia</h2>
+  <p>Usando WhatsApp stai affidando la riservatezza delle tue comunicazioni a Meta, un'azienda quotata in borsa soggetta alla legge americana, con un modello di business basato sulla pubblicità. Usando Signal stai affidando la riservatezza a una fondazione non profit con buone intenzioni ma comunque soggetta a ordini giudiziari americani.</p>
+  <p>Con Invisible, l'infrastruttura server è installata su un VPS di tua proprietà, nella giurisdizione che scegli, con accesso fisico e logico che controlli tu. Non esiste un terzo a cui fare pressione per ottenere dati, perché i dati non esistono in forma leggibile su nessun server.</p>
+
+  <h2>9.4 Il Protocollo Crittografico: la Stessa Forza di Signal</h2>
+  <p>Invisible non inventa una crittografia proprietaria — scelta che sarebbe un grave errore di sicurezza. Usa il protocollo Signal (X3DH + Double Ratchet), lo stesso utilizzato da WhatsApp, Signal, Google Messages e Facebook Secret Conversations. Questo protocollo è il gold standard mondiale della messaggistica sicura, sviluppato dai migliori crittografi mondiali e auditato indipendentemente più volte.</p>
+  <p>La forza di Invisible sta nel combinare questo protocollo con le protezioni aggiuntive che le altre piattaforme non hanno: anonimato dell'identità, protezione dei metadati, infrastruttura privata.</p>
+
+  <h2>9.5 Sintesi del Vantaggio Competitivo</h2>
+  <div class="highlight">
+    <p>Signal protegge il <strong>contenuto</strong> ma non l'<strong>identità</strong> né i <strong>metadati</strong>.<br>
+    WhatsApp protegge il <strong>contenuto</strong> ma vende i <strong>metadati</strong> e conosce l'<strong>identità</strong>.<br>
+    Invisible protegge il <strong>contenuto</strong>, l'<strong>identità</strong> e i <strong>metadati</strong>.</p>
+    <p style="margin-top:12px; margin-bottom:0"><strong>Questa è la combinazione che nessuno ha ancora realizzato in un prodotto commerciale.</strong></p>
+  </div>
+</div>
+
+<!-- CAPITOLO 10: CASI D'USO -->
+<div class="chapter" id="cap10">
+  <div class="chapter-num">Capitolo 10</div>
+  <h1>Casi d'Uso e Target di Mercato</h1>
+
+  <h2>10.1 Settore Legale e Giudiziario</h2>
+  <p>Studi legali, notai, magistrati, avvocati penalisti necessitano di comunicazioni con i propri assistiti che siano protette dal segreto professionale in modo tecnico, non solo contrattuale. Il privilegio avvocato-cliente non è sufficiente se le comunicazioni avvengono su piattaforme soggette a subpoena americane. Invisible offre comunicazioni dove il contenuto è tecnicamente inaccessibile a terze parti.</p>
+
+  <h2>10.2 Settore Finanziario e Corporate</h2>
+  <p>Banche d'investimento, fondi hedge, società di M&A, aziende quotate in borsa gestiscono comunicazioni con informazioni price-sensitive. Una violazione di queste comunicazioni configura insider trading o manipolazione di mercato. Il livello di protezione di Invisible supera quello di qualsiasi soluzione enterprise attualmente disponibile.</p>
+
+  <h2>10.3 Giornalismo e Media</h2>
+  <p>Giornalisti investigativi, whistleblower, fonti anonime necessitano di un canale di comunicazione dove la fonte non possa essere identificata. Invisible fornisce proprio questo: nessun numero di telefono, nessun server che sa con chi stai comunicando, identità puramente crittografica.</p>
+
+  <h2>10.4 Organizzazioni Non Governative e Diritti Umani</h2>
+  <p>ONG operative in paesi con governi autoritari, attivisti, rifugiati, operatori umanitari in zone di conflitto necessitano di comunicazioni sicure in ambienti dove l'intercettazione delle comunicazioni è pratica governativa standard. Invisible fornisce protezione anche in scenari di sorveglianza di stato.</p>
+
+  <h2>10.5 Sicurezza Nazionale e Forze dell'Ordine</h2>
+  <p>Operazioni sotto copertura, comunicazioni riservate tra reparti investigativi, coordinamento in operazioni sensibili richiedono canali di comunicazione immune da intercettazione. Il multiprofilo di Invisible è particolarmente rilevante per compartimentalizzare operazioni diverse.</p>
+
+  <h2>10.6 Privati High-Value</h2>
+  <p>Politici, dirigenti d'azienda, personalità pubbliche, HNWI (High Net Worth Individuals) con necessità di comunicazioni private che non lascino tracce accessibili a terzi, paparazzi, stalker o hacker.</p>
+
+  <h2>10.7 Modelli di Distribuzione</h2>
+  <table>
+    <thead><tr><th>Modello</th><th>Target</th><th>Caratteristiche</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Enterprise Self-Hosted</td>
+        <td>Aziende, istituzioni</td>
+        <td>VPS dedicato, utenti gestiti internamente, massima riservatezza</td>
+      </tr>
+      <tr>
+        <td>SaaS Managed</td>
+        <td>PMI, professionisti</td>
+        <td>Infrastruttura gestita, onboarding semplificato</td>
+      </tr>
+      <tr>
+        <td>Consumer Premium</td>
+        <td>Privati</td>
+        <td>App store, abbonamento mensile</td>
+      </tr>
+      <tr>
+        <td>White Label</td>
+        <td>Integratori, governi</td>
+        <td>Rebrand completo, personalizzazione infrastruttura</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- CAPITOLO 11: NOVITÀ E BREVETTABILITÀ -->
+<div class="chapter" id="cap11">
+  <div class="chapter-num">Capitolo 11</div>
+  <h1>Elementi di Novità e Brevettabilità</h1>
+
+  <div class="callout">
+    <p><strong>Nota:</strong> I seguenti elementi rappresentano combinazioni e implementazioni originali. Si raccomanda la consulenza di un avvocato brevettista specializzato in software per la valutazione formale di brevettabilità nella giurisdizione di interesse.</p>
+  </div>
+
+  <h2>11.1 Sistema di Messaggistica con Identità Puramente Crittografica</h2>
+  <p><strong>Novità:</strong> Nessuna piattaforma di messaggistica commerciale esistente opera senza alcun identificatore di identità registrato (numero, email, username). Invisible introduce il paradigma dell'identità come coppia di chiavi asimmetriche generata localmente, senza registrazione su alcun server.</p>
+  <p><strong>Applicazione:</strong> Metodo e sistema per la comunicazione sicura tra dispositivi mobili basato esclusivamente su coppie di chiavi crittografiche asimmetriche come identificatori di identità, senza registrazione di dati personali su server centralizzati.</p>
+
+  <h2>11.2 Multiprofilo con Isolamento Crittografico Completo</h2>
+  <p><strong>Novità:</strong> L'implementazione di profili multipli su un singolo dispositivo mobile con isolamento crittografico completo — chiavi separate, database separati, sessioni separate — è un'architettura non presente in nessuna piattaforma commerciale.</p>
+  <p><strong>Applicazione:</strong> Metodo per la gestione di identità crittografiche multiple e isolate su un singolo dispositivo mobile, con separazione completa dei contesti crittografici e impossibilità di correlazione tra profili dall'esterno del dispositivo.</p>
+
+  <h2>11.3 Architettura Multi-Layer Encryption con Rete Mesh Integrata</h2>
+  <p><strong>Novità:</strong> La combinazione specifica di WireGuard mesh VPN + TLS 1.3 + Signal Protocol E2E in un'unica piattaforma mobile integrata, con il particolare meccanismo di mascheramento degli IP reali tramite indirizzi mesh interni nel protocollo di scambio ICE per WebRTC.</p>
+  <p><strong>Applicazione:</strong> Sistema di comunicazione mobile con cifratura a tre layer sovrapposti e rete overlay mesh per l'anonimizzazione degli indirizzi IP nelle comunicazioni P2P.</p>
+
+  <h2>11.4 Scambio di Identità Crittografica via QR Code</h2>
+  <p><strong>Novità:</strong> Il formato QR specifico che codifica simultaneamente Master Key X25519, Identity Key Ed25519, Signed Pre-Key X25519 e la firma Ed25519 della Signed Pre-Key, permettendo la verifica crittografica dell'autenticità dell'identità al momento dello scambio, senza server intermediari.</p>
+  <p><strong>Applicazione:</strong> Metodo per lo scambio sicuro e verificabile di parametri crittografici per l'inizializzazione del protocollo X3DH tramite codice QR, eliminando la necessità di server di distribuzione delle chiavi.</p>
+
+  <h2>11.5 Panic Button con Wipe Crittografico</h2>
+  <p><strong>Novità:</strong> Il meccanismo specifico di cancellazione crittografica immediata dell'identità — sovrascrittura delle chiavi con dati casuali prima della cancellazione, invalidazione matematica di tutte le sessioni attive, reset dell'applicazione allo stato di prima installazione in un'unica operazione atomica.</p>
+
+  <h2>11.6 Sistema di Distribuzione Controllata via Invito Crittografico</h2>
+  <p><strong>Novità:</strong> Il meccanismo per cui l'unico modo di accedere alla rete è ricevere un QR code da un utente già presente — senza possibilità di auto-registrazione — crea una rete di fiducia crittograficamente verificata dove ogni relazione è esplicitamente autorizzata da entrambe le parti.</p>
+</div>
+
+<!-- CAPITOLO 12: GLOSSARIO -->
+<div class="chapter" id="cap12">
+  <div class="chapter-num">Capitolo 12</div>
+  <h1>Glossario dei Termini</h1>
+
+  <table>
+    <thead><tr><th>Termine</th><th>Definizione</th></tr></thead>
+    <tbody>
+      <tr><td>AES-256-GCM</td><td>Advanced Encryption Standard con chiave a 256 bit in modalità Galois/Counter Mode. Standard di cifratura simmetrica usato da governi e banche.</td></tr>
+      <tr><td>Double Ratchet</td><td>Algoritmo crittografico che genera una nuova chiave per ogni messaggio, garantendo che la compromissione di una chiave non esponga né i messaggi passati né quelli futuri.</td></tr>
+      <tr><td>Ed25519</td><td>Algoritmo di firma digitale basato su curve ellittiche. Usato per autenticare l'identità e verificare l'integrità dei dati.</td></tr>
+      <tr><td>End-to-End Encryption (E2E)</td><td>Cifratura dove solo mittente e destinatario possono leggere il messaggio. Il server di trasporto vede solo dati cifrati.</td></tr>
+      <tr><td>Forward Secrecy</td><td>Proprietà crittografica per cui la compromissione delle chiavi attuali non espone i messaggi passati, perché le chiavi precedenti sono già state eliminate.</td></tr>
+      <tr><td>IP Mesh</td><td>Indirizzo IP privato assegnato all'interno della rete VPN WireGuard (es. 10.7.0.5). Non corrisponde all'IP reale del dispositivo.</td></tr>
+      <tr><td>KeyStore / Keychain</td><td>Area hardware sicura del chip del dispositivo (Android/iOS) dove vengono conservate le chiavi crittografiche. Non accessibile ad app o processi esterni.</td></tr>
+      <tr><td>PBKDF2</td><td>Password-Based Key Derivation Function 2. Algoritmo che trasforma un PIN in una chiave crittografica tramite 100.000 iterazioni di hashing, rendendo gli attacchi brute-force impraticabili.</td></tr>
+      <tr><td>Signal Protocol</td><td>Protocollo crittografico sviluppato da Open Whisper Systems (oggi Signal Foundation). Considerato il gold standard della messaggistica sicura. Usato da WhatsApp, Signal, Google Messages.</td></tr>
+      <tr><td>SQLCipher</td><td>Estensione di SQLite che cifra l'intero database con AES-256. I file del database sono indistinguibili da dati casuali senza la chiave corretta.</td></tr>
+      <tr><td>TLS 1.3</td><td>Transport Layer Security versione 1.3. Il protocollo che protegge le connessioni HTTPS. Versione 1.3 è la più moderna e sicura, con perfect forward secrecy obbligatoria.</td></tr>
+      <tr><td>WebRTC</td><td>Web Real-Time Communication. Standard aperto per comunicazioni audio/video P2P tra dispositivi, con cifratura SRTP/DTLS integrata.</td></tr>
+      <tr><td>WireGuard</td><td>Protocollo VPN moderno, più veloce e sicuro di OpenVPN o IPSec. Utilizza ChaCha20 per cifratura e Curve25519 per lo scambio di chiavi.</td></tr>
+      <tr><td>X25519</td><td>Algoritmo Diffie-Hellman su curva ellittica Curve25519. Usato per lo scambio di chiavi crittografiche senza trasmettere la chiave stessa.</td></tr>
+      <tr><td>X3DH</td><td>Extended Triple Diffie-Hellman. Protocollo per stabilire una chiave di sessione condivisa tra due utenti che non si sono mai comunicati prima, usando solo le loro chiavi pubbliche.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="section-divider"></div>
+  <div class="page-footer">
+    <span>INVISIBLE — Documento Funzionale v1.0</span>
+    <span>RISERVATO — Proprietà Intellettuale dell'Autore</span>
+    <span>2026</span>
+  </div>
+</div>
+
+</body>
+</html>
