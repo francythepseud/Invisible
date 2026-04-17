@@ -44,6 +44,8 @@ class CallService {
   RTCPeerConnection? _peerConnection;
   MediaStream? _localStream;
   MediaStream? _remoteStream;
+  // Buffer ICE candidate arrivati prima che _peerConnection esista (lato ricevente)
+  final List<RTCIceCandidate> _bufferedCandidates = [];
 
   String? _currentCallId;
   String? _remoteIdentityHash;
@@ -192,6 +194,17 @@ class CallService {
       RTCSessionDescription(info.remoteSdp, 'offer'),
     );
 
+    // Applica ICE candidate arrivati mentre il ricevente stava vedendo il ringtone
+    if (_bufferedCandidates.isNotEmpty) {
+      debugPrint('[CALL] applico ${_bufferedCandidates.length} candidati bufferizzati');
+      for (final candidate in _bufferedCandidates) {
+        try { await _peerConnection!.addCandidate(candidate); } catch (e) {
+          debugPrint('[CALL] addCandidate buffered error: $e');
+        }
+      }
+      _bufferedCandidates.clear();
+    }
+
     final answer = await _peerConnection!.createAnswer();
     await _peerConnection!.setLocalDescription(answer);
 
@@ -223,13 +236,20 @@ class CallService {
   void _handleIceCandidate(SignalingMessage msg) async {
     final c = msg.data['candidate'] as Map<String, dynamic>?;
     if (c == null) return;
-    await _peerConnection?.addCandidate(
-      RTCIceCandidate(
-        c['candidate'] as String?,
-        c['sdpMid'] as String?,
-        c['sdpMLineIndex'] as int?,
-      ),
+    final candidate = RTCIceCandidate(
+      c['candidate'] as String?,
+      c['sdpMid'] as String?,
+      c['sdpMLineIndex'] as int?,
     );
+    if (_peerConnection != null) {
+      debugPrint('[CALL] addCandidate immediato');
+      await _peerConnection!.addCandidate(candidate);
+    } else {
+      // PeerConnection non ancora creato (lato ricevente, ringtone in corso):
+      // bufferizza il candidato e applicalo in acceptCall dopo setRemoteDescription.
+      debugPrint('[CALL] addCandidate BUFFERIZZATO (peerConn null)');
+      _bufferedCandidates.add(candidate);
+    }
   }
 
   void _handleRemoteHangup() {
@@ -423,6 +443,7 @@ class CallService {
     _remoteStream = null;
     _currentCallId = null;
     _remoteIdentityHash = null;
+    _bufferedCandidates.clear();
     _callState = CallState.idle;
   }
 

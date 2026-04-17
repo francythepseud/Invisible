@@ -434,9 +434,9 @@ class _CallsListScreenState extends State<CallsListScreen> {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final date = DateTime(dt.year, dt.month, dt.day);
-    if (date == today) return DateFormat('HH:mm').format(dt);
+    if (date == today) return DateFormat('HH:mm', 'it').format(dt);
     if (date == today.subtract(const Duration(days: 1))) {
-      return 'Ieri ${DateFormat('HH:mm').format(dt)}';
+      return 'Ieri ${DateFormat('HH:mm', 'it').format(dt)}';
     }
     return DateFormat('d MMM', 'it').format(dt);
   }

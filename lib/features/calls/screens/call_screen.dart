@@ -61,11 +61,13 @@ class _CallScreenState extends State<CallScreen> {
     final local = _callService.localStream;
     if (local != null) _localRenderer.srcObject = local;
 
-    // Collega lo stream remoto quando disponibile
+    // Collega lo stream remoto se già disponibile (onTrack potrebbe essere scattato
+    // prima che CallScreen fosse pushata — race condition su connessioni veloci)
     final remote = _callService.remoteStream;
     if (remote != null) {
       _remoteRenderer.srcObject = remote;
       setState(() => _isConnecting = false);
+      _startTimer();
     }
 
     _remoteStreamSub = _callService.remoteStreamStream.listen((stream) {

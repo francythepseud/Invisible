@@ -31,7 +31,8 @@ class IncomingCallScreen extends StatefulWidget {
 }
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
-  final _player = AudioPlayer();
+  AudioPlayer? _player;
+  bool _ringtoneStopped = false;
   Timer? _vibrationTimer;
   StreamSubscription<CallState>? _callStateSub;
 
@@ -66,28 +67,35 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _startRingtone() async {
+    _player = AudioPlayer();
     try {
-      // Configura sessione audio: playback funziona su iOS e Android
-      await _player.setAudioContext(AudioContext(
+      // Configura sessione audio per la ringtone.
+      // iOS: playAndRecord obbligatorio per suonare con silent switch attivo;
+      //   mixWithOthers permette a WebRTC di sovrascrivere la sessione senza conflitti.
+      // Android: gain (non transient) così quando il ringtone termina AudioFocus
+      //   viene rilasciato esplicitamente e WebRTC può reclamare il focus audio.
+      await _player!.setAudioContext(AudioContext(
         iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.playback,
-          options: const {AVAudioSessionOptions.mixWithOthers},
+          category: AVAudioSessionCategory.playAndRecord,
+          options: const {
+            AVAudioSessionOptions.mixWithOthers,
+          },
         ),
         android: AudioContextAndroid(
           isSpeakerphoneOn: false,
           stayAwake: true,
-          contentType: AndroidContentType.music,
+          contentType: AndroidContentType.sonification,
           usageType: AndroidUsageType.notificationRingtone,
           audioFocus: AndroidAudioFocus.gain,
         ),
       ));
-      await _player.setVolume(1.0);
-      await _player.setReleaseMode(ReleaseMode.loop);
+      await _player!.setVolume(1.0);
+      await _player!.setReleaseMode(ReleaseMode.loop);
       // Salva su file temporaneo (BytesSource non è supportato su iOS)
       final tmpDir = await getTemporaryDirectory();
       final ringFile = File('${tmpDir.path}/incoming_ring.wav');
       await ringFile.writeAsBytes(_generateRingtoneWav());
-      await _player.play(DeviceFileSource(ringFile.path));
+      await _player!.play(DeviceFileSource(ringFile.path));
     } catch (e) {
       debugPrint('[CALL] Ringtone error: $e');
     }
@@ -100,10 +108,13 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   void _stopRingtone() {
+    if (_ringtoneStopped) return;
+    _ringtoneStopped = true;
     _vibrationTimer?.cancel();
     _vibrationTimer = null;
-    _player.stop();
-    _player.dispose();
+    try { _player?.stop(); } catch (_) {}
+    try { _player?.dispose(); } catch (_) {}
+    _player = null;
   }
 
   void _onAccept() {
