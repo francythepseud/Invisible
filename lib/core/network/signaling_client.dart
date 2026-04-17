@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:invisible/core/services/profile_service.dart';
 
@@ -31,8 +32,11 @@ class SignalingMessage {
 
 /// Client WebSocket per il server di segnalazione WebRTC.
 ///
+/// Protocollo server Go (/v1/signal):
+///   Client → Server: {"type":"offer|answer|ice|hangup", "to":"destHash", "payload":"{...JSON...}"}
+///   Server → Client: {"type":"offer|answer|ice|hangup", "from":"senderHash", "payload":"{...JSON...}"}
+///
 /// Autenticazione: stessa challenge-response Ed25519 del relay.
-/// Gestisce offerte, risposte e candidati ICE per le chiamate.
 class SignalingClient {
   static final SignalingClient _instance = SignalingClient._internal();
   factory SignalingClient() => _instance;
@@ -66,8 +70,9 @@ class SignalingClient {
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_signalingUrl!));
       _channel!.stream.listen(_onMessage, onError: _onError, onDone: _onDone);
-      _send({'type': 'get_challenge'});
-    } catch (_) {
+      // Il server invia il challenge immediatamente — non serve get_challenge
+    } catch (e) {
+      debugPrint('[SIGNAL] Connessione fallita: $e');
       _scheduleReconnect();
     }
   }
@@ -82,16 +87,25 @@ class SignalingClient {
           await _handleChallenge(msg['challenge'] as String);
         case 'auth_ok':
           _connected = true;
+          debugPrint('[SIGNAL] auth_ok — connesso id=${msg['from'] ?? ''}');
           _startPing();
         case 'auth_fail':
           _intentionalDisconnect = true;
           await disconnect();
-        case 'signal':
-          _handleSignal(msg);
+        case 'offer':
+          _dispatchSignal(msg, SignalingMessageType.callOffer);
+        case 'answer':
+          _dispatchSignal(msg, SignalingMessageType.callAnswer);
+        case 'ice':
+          _dispatchSignal(msg, SignalingMessageType.iceCandidate);
+        case 'hangup':
+          _dispatchSignal(msg, SignalingMessageType.callEnd);
         case 'pong':
           break;
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[SIGNAL] _onMessage errore: $e');
+    }
   }
 
   Future<void> _handleChallenge(String challengeBase64) async {
@@ -118,31 +132,30 @@ class SignalingClient {
     });
   }
 
-  void _handleSignal(Map<String, dynamic> msg) {
+  /// Decodifica un messaggio in arrivo dal server e lo emette nello stream.
+  /// Il server invia: {"type":"offer|answer|ice|hangup", "from":"hash", "payload":"{...}"}
+  void _dispatchSignal(Map<String, dynamic> msg, SignalingMessageType type) {
     try {
       final from = msg['from'] as String? ?? '';
-      final callId = msg['call_id'] as String? ?? '';
-      final signalType = msg['signal_type'] as String? ?? '';
-
-      final type = switch (signalType) {
-        'call_offer' => SignalingMessageType.callOffer,
-        'call_answer' => SignalingMessageType.callAnswer,
-        'ice_candidate' => SignalingMessageType.iceCandidate,
-        'call_end' => SignalingMessageType.callEnd,
-        _ => SignalingMessageType.unknown,
-      };
-
-      if (type == SignalingMessageType.unknown) return;
-
+      final payloadRaw = msg['payload'];
+      Map<String, dynamic> payload = {};
+      if (payloadRaw is String && payloadRaw.isNotEmpty) {
+        payload = jsonDecode(payloadRaw) as Map<String, dynamic>;
+      } else if (payloadRaw is Map<String, dynamic>) {
+        payload = payloadRaw;
+      }
+      final callId = payload['call_id'] as String? ?? '';
+      debugPrint('[SIGNAL] ricevuto ${type.name} from=$from callId=$callId');
       final sigMsg = SignalingMessage(
         type: type,
         fromIdentityHash: from,
         callId: callId,
-        data: Map<String, dynamic>.from(msg),
+        data: payload,
       );
-
       if (!_messageController.isClosed) _messageController.add(sigMsg);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[SIGNAL] Errore dispatch signal: $e');
+    }
   }
 
   // ─── Invio messaggi di segnalazione ──────────────────────────────────────
@@ -154,12 +167,13 @@ class SignalingClient {
     required bool isVideo,
   }) {
     _send({
-      'type': 'signal',
+      'type': 'offer',
       'to': toIdentityHash,
-      'call_id': callId,
-      'signal_type': 'call_offer',
-      'sdp': sdp,
-      'is_video': isVideo,
+      'payload': jsonEncode({
+        'sdp': sdp,
+        'call_id': callId,
+        'is_video': isVideo,
+      }),
     });
   }
 
@@ -169,11 +183,12 @@ class SignalingClient {
     required String callId,
   }) {
     _send({
-      'type': 'signal',
+      'type': 'answer',
       'to': toIdentityHash,
-      'call_id': callId,
-      'signal_type': 'call_answer',
-      'sdp': sdp,
+      'payload': jsonEncode({
+        'sdp': sdp,
+        'call_id': callId,
+      }),
     });
   }
 
@@ -183,11 +198,12 @@ class SignalingClient {
     required String callId,
   }) {
     _send({
-      'type': 'signal',
+      'type': 'ice',
       'to': toIdentityHash,
-      'call_id': callId,
-      'signal_type': 'ice_candidate',
-      'candidate': candidate,
+      'payload': jsonEncode({
+        'candidate': candidate,
+        'call_id': callId,
+      }),
     });
   }
 
@@ -196,10 +212,11 @@ class SignalingClient {
     required String callId,
   }) {
     _send({
-      'type': 'signal',
+      'type': 'hangup',
       'to': toIdentityHash,
-      'call_id': callId,
-      'signal_type': 'call_end',
+      'payload': jsonEncode({
+        'call_id': callId,
+      }),
     });
   }
 

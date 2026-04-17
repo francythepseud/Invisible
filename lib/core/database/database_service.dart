@@ -22,13 +22,37 @@ class DatabaseService {
     final dbPath = await _getDatabasePath(profileId);
 
     // Apri/Crea il database criptato
-    _database = await openDatabase(
-      dbPath,
-      password: dbKey,
-      version: 3,
-      onCreate: _onCreate,
-      onUpgrade: _onUpgrade,
-    );
+    try {
+      _database = await openDatabase(
+        dbPath,
+        password: dbKey,
+        version: 3,
+        onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
+      );
+    } catch (e) {
+      // SQLITE_NOTADB (code 26): file corrotto o troncato.
+      // Cancelliamo SOLO se il file è 0 byte (creazione interrotta da crash):
+      // un file più grande potrebbe avere dati reali o essere password sbagliata.
+      if (e.toString().contains('26') || e.toString().contains('not a database')) {
+        final file = File(dbPath);
+        final size = await file.exists() ? await file.length() : -1;
+        if (size == 0) {
+          await file.delete();
+          _database = await openDatabase(
+            dbPath,
+            password: dbKey,
+            version: 3,
+            onCreate: _onCreate,
+            onUpgrade: _onUpgrade,
+          );
+        } else {
+          rethrow;
+        }
+      } else {
+        rethrow;
+      }
+    }
 
     _currentProfileId = profileId;
     return _database!;

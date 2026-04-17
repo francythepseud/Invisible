@@ -46,9 +46,13 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Necessario per le videochiamate cifrate end-to-end</string>
+	<string>Necessario per le videochiamate e per scattare foto da inviare in chat</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Necessario per le chiamate audio e video cifrate end-to-end</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Necessario per condividere la posizione in chat</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necessario per selezionare foto dalla galleria da inviare in chat</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Invisible usa la rete locale per la comunicazione P2P cifrata</string>
 	<key>UIBackgroundModes</key>

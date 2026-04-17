@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:invisible/core/network/signaling_client.dart';
@@ -97,14 +98,29 @@ class CallService {
   /// e genera l'offerta SDP inviandola via signaling.
   /// L'UI deve navigare a CallScreen dopo aver chiamato questo metodo.
   Future<bool> initiateCall(Contact contact, {bool isVideo = false}) async {
-    if (_callState != CallState.idle) return false;
+    if (_callState != CallState.idle) {
+      debugPrint('[CALL] initiateCall fallito: stato non idle ($_callState)');
+      return false;
+    }
+
+    if (!_signaling.isConnected) {
+      debugPrint('[CALL] initiateCall fallito: signaling non connesso');
+      return false;
+    }
 
     final granted = await _requestPermissions(isVideo);
-    if (!granted) return false;
+    if (!granted) {
+      debugPrint('[CALL] initiateCall fallito: permessi negati');
+      return false;
+    }
 
     _isVideo = isVideo;
     _currentCallId = _generateCallId();
-    _remoteIdentityHash = _sha256Hex(contact.identityKey ?? '');
+    // shortHash: ultimi 32 caratteri della identity key base64 (stesso schema del relay)
+    final ik = contact.identityKey ?? '';
+    _remoteIdentityHash = ik.length > 32 ? ik.substring(ik.length - 32) : ik;
+    debugPrint('[CALL] initiateCall → contact="${contact.name}" identityKey(full)=$ik');
+    debugPrint('[CALL] initiateCall → remoteHash=$_remoteIdentityHash isVideo=$isVideo signalingConnected=${_signaling.isConnected}');
     _updateCallState(CallState.calling);
 
     await _createPeerConnection();
@@ -127,6 +143,7 @@ class CallService {
   // ─── Chiamata in entrata ──────────────────────────────────────────────────
 
   void _handleOffer(SignalingMessage msg) async {
+    debugPrint('[CALL] offer ricevuto da ${msg.fromIdentityHash} callId=${msg.callId}');
     if (_callState != CallState.idle) {
       // Già in chiamata: rifiuta automaticamente
       _signaling.sendCallEnd(
@@ -160,7 +177,9 @@ class CallService {
   /// Accetta la chiamata in arrivo: crea la risposta SDP.
   /// L'UI deve navigare a CallScreen dopo aver chiamato questo metodo.
   Future<bool> acceptCall(IncomingCallInfo info) async {
+    debugPrint('[CALL] acceptCall — isVideo=${info.isVideo} callId=${info.callId}');
     final granted = await _requestPermissions(info.isVideo);
+    debugPrint('[CALL] acceptCall — permessi: $granted');
     if (!granted) return false;
 
     _updateCallState(CallState.active);
@@ -232,7 +251,12 @@ class CallService {
   }
 
   void toggleMute() {
-    _localStream?.getAudioTracks().forEach((t) => t.enabled = !t.enabled);
+    final tracks = _localStream?.getAudioTracks() ?? [];
+    for (final t in tracks) {
+      t.enabled = !t.enabled;
+      debugPrint('[CALL] toggleMute — track ${t.id} enabled=${t.enabled}');
+    }
+    if (tracks.isEmpty) debugPrint('[CALL] toggleMute — nessun audioTrack locale!');
   }
 
   void toggleCamera() {
@@ -244,8 +268,13 @@ class CallService {
     if (videoTrack != null) await Helper.switchCamera(videoTrack);
   }
 
-  void enableSpeaker(bool enable) {
-    Helper.setSpeakerphoneOn(enable);
+  Future<void> enableSpeaker(bool enable) async {
+    try {
+      await Helper.setSpeakerphoneOn(enable);
+      debugPrint('[CALL] Speaker ${enable ? "ON" : "OFF"}');
+    } catch (e) {
+      debugPrint('[CALL] enableSpeaker error: $e');
+    }
   }
 
   // ─── PeerConnection ───────────────────────────────────────────────────────
@@ -274,8 +303,13 @@ class CallService {
     };
 
     _peerConnection!.onTrack = (event) {
+      debugPrint('[CALL] onTrack — kind=${event.track.kind} streams=${event.streams.length}');
       if (event.streams.isNotEmpty) {
         _remoteStream = event.streams.first;
+        final remoteTracks = _remoteStream!.getTracks();
+        for (final t in remoteTracks) {
+          debugPrint('[CALL]   remoteTrack id=${t.id} kind=${t.kind} enabled=${t.enabled}');
+        }
         if (!_remoteStreamController.isClosed) {
           _remoteStreamController.add(_remoteStream!);
         }
@@ -283,29 +317,75 @@ class CallService {
     };
 
     _peerConnection!.onConnectionState = (state) {
+      debugPrint('[CALL] onConnectionState: $state');
       if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
           state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _handleRemoteHangup();
       }
     };
+
+    _peerConnection!.onIceConnectionState = (state) {
+      debugPrint('[CALL] onIceConnectionState: $state');
+    };
   }
 
   Future<MediaStream> _getUserMedia(bool withVideo) async {
-    return await navigator.mediaDevices.getUserMedia({
-      'audio': true,
+    debugPrint('[CALL] getUserMedia start — withVideo=$withVideo');
+    final stream = await navigator.mediaDevices.getUserMedia({
+      'audio': {
+        'echoCancellation': true,
+        'noiseSuppression': true,
+        'autoGainControl': true,
+        'googEchoCancellation': true,
+        'googNoiseSuppression': true,
+        'googAutoGainControl': true,
+        'googHighpassFilter': true,
+      },
       'video': withVideo
           ? {'facingMode': 'user', 'width': 1280, 'height': 720}
           : false,
     });
+    final audioTracks = stream.getAudioTracks();
+    final videoTracks = stream.getVideoTracks();
+    debugPrint('[CALL] getUserMedia OK — audioTracks=${audioTracks.length} videoTracks=${videoTracks.length}');
+    for (final t in audioTracks) {
+      debugPrint('[CALL]   audioTrack id=${t.id} enabled=${t.enabled} kind=${t.kind}');
+    }
+    return stream;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
   Future<bool> _requestPermissions(bool withVideo) async {
-    final perms = [Permission.microphone];
-    if (withVideo) perms.add(Permission.camera);
-    final results = await perms.request();
-    return results.values.every((s) => s.isGranted);
+    try {
+      final constraints = {
+        'audio': true,
+        'video': withVideo ? {'facingMode': 'user'} : false,
+      };
+      final testStream = await navigator.mediaDevices.getUserMedia(constraints);
+      for (final track in testStream.getTracks()) {
+        await track.stop();
+      }
+      testStream.dispose();
+      debugPrint('[CALL] _requestPermissions OK — withVideo=$withVideo');
+      return true;
+    } catch (e) {
+      debugPrint('[CALL] Permessi negati via getUserMedia: $e');
+      try {
+        final micStatus = await Permission.microphone.status;
+        if (micStatus.isPermanentlyDenied) {
+          await openAppSettings();
+        } else {
+          final result = await Permission.microphone.request();
+          if (result.isPermanentlyDenied) await openAppSettings();
+          if (withVideo) {
+            final camResult = await Permission.camera.request();
+            if (camResult.isPermanentlyDenied) await openAppSettings();
+          }
+        }
+      } catch (_) {}
+      return false;
+    }
   }
 
   Future<String> _resolveCallerName(String identityHash) async {
@@ -315,20 +395,14 @@ class CallService {
       final rows = await db.query('contacts') as List<Map<String, dynamic>>;
       for (final row in rows) {
         final ik = row['identity_key'] as String?;
-        if (ik != null && _sha256Hex(ik) == identityHash) {
+        if (ik == null) continue;
+        final computed = ik.length > 32 ? ik.substring(ik.length - 32) : ik;
+        if (computed == identityHash) {
           return row['name'] as String? ?? 'Chiamata in arrivo';
         }
       }
     } catch (_) {}
     return 'Chiamata in arrivo';
-  }
-
-  /// Calcola SHA-256 hex dell'identity key (stesso algoritmo del server).
-  String _sha256Hex(String input) {
-    // Usa il package crypto tramite utf8 encode + digest
-    final bytes = utf8.encode(input);
-    // Fallback leggero senza import aggiuntivi
-    return base64Encode(bytes);
   }
 
   String _generateCallId() {

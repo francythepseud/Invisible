@@ -12,7 +12,9 @@ class ProfileService {
   factory ProfileService() => _instance;
   ProfileService._internal();
 
-  final _secureStorage = const FlutterSecureStorage();
+  final _secureStorage = const FlutterSecureStorage(
+    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+  );
   final _cryptoService = CryptoService();
   final _databaseService = DatabaseService();
 

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart' as crypto;
@@ -183,11 +184,18 @@ class MessageService {
       if (contactRows.isEmpty) return;
 
       final identityKey = contactRows.first['identity_key'] as String?;
-      if (identityKey == null) return;
+      if (identityKey == null) {
+        debugPrint('[MSG] identityKey null per contatto ${conversation.contactId}');
+        return;
+      }
 
-      final toHash = crypto.sha256
-          .convert(utf8.encode(identityKey))
-          .toString();
+      // Il relay usa shortHash: ultimi 32 caratteri della identity key base64
+      final toHash = identityKey.length > 32
+          ? identityKey.substring(identityKey.length - 32)
+          : identityKey;
+
+      debugPrint('[MSG] identityKey(len=${identityKey.length})=$identityKey');
+      debugPrint('[MSG] Invio a hash(len=${toHash.length})=$toHash relayStatus=${InvisibleClient().status}');
 
       // Payload esterno: solo ciphertext + header — il relay non vede altro
       final outerPayload = base64Encode(
@@ -202,8 +210,10 @@ class MessageService {
         encryptedPayload: outerPayload,
       );
 
+      debugPrint('[MSG] Inviato OK');
       await updateMessageStatus(messageId, MessageStatus.sent);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[MSG] Errore invio: $e');
       await updateMessageStatus(messageId, MessageStatus.sent);
     }
   }
@@ -220,7 +230,23 @@ class MessageService {
         await _conversationService.loadRatchetState(conversationId);
 
     if (ratchetState == null) {
-      throw Exception('No session established with this contact');
+      // Prima ricezione: inizializza come ricevente usando ECDH simmetrico
+      final conv = await _conversationService.getConversation(conversationId);
+      if (conv == null) throw Exception('Conversation not found');
+      final contactRows = await _db.query(
+        'contacts',
+        where: 'id = ?',
+        whereArgs: [conv.contactId],
+      );
+      if (contactRows.isEmpty) throw Exception('Contact not found');
+      final theirMasterKey = contactRows.first['public_key'] as String? ?? '';
+      final theirSpk = contactRows.first['signed_pre_key'] as String? ?? theirMasterKey;
+
+      ratchetState = await _conversationService.initializeSessionAsReceiver(
+        conversationId: conversationId,
+        theirMasterKeyBase64: theirMasterKey,
+        theirSpkBase64: theirSpk,
+      );
     }
 
     final header = await _deserializeMessageHeader(headerJson);
@@ -230,10 +256,31 @@ class MessageService {
       newState: ratchetState,
     );
 
-    final decryptedMessage = await _doubleRatchet.decrypt(
-      ratchetState,
-      encryptedMessage,
-    );
+    DecryptedMessage decryptedMessage;
+    try {
+      decryptedMessage = await _doubleRatchet.decrypt(
+        ratchetState,
+        encryptedMessage,
+      );
+    } catch (e) {
+      // Ratchet state corrotto (es. sessione inizializzata prima del fix).
+      // Reset e riprova come ricevente fresh.
+      debugPrint('[MSG] MAC error, reset ratchet state e riprovo: $e');
+      final conv = await _conversationService.getConversation(conversationId);
+      if (conv == null) rethrow;
+      final contactRows = await _db.query(
+        'contacts', where: 'id = ?', whereArgs: [conv.contactId],
+      );
+      if (contactRows.isEmpty) rethrow;
+      final theirMasterKey = contactRows.first['public_key'] as String? ?? '';
+      final theirSpk = contactRows.first['signed_pre_key'] as String? ?? theirMasterKey;
+      ratchetState = await _conversationService.initializeSessionAsReceiver(
+        conversationId: conversationId,
+        theirMasterKeyBase64: theirMasterKey,
+        theirSpkBase64: theirSpk,
+      );
+      decryptedMessage = await _doubleRatchet.decrypt(ratchetState, encryptedMessage);
+    }
 
     await _conversationService.updateRatchetState(
       conversationId,
@@ -391,6 +438,63 @@ class MessageService {
       whereArgs: [conversationId, MessageStatus.read.name],
     );
     await _conversationService.clearUnreadCount(conversationId);
+  }
+
+  /// Marca come letti tutti i messaggi uscenti di una conversazione
+  /// (chiamato quando l'altro utente manda la read receipt).
+  Future<void> markOutgoingMessagesAsRead(String conversationId) async {
+    await _db.update(
+      'messages',
+      {'status': MessageStatus.read.name},
+      where: 'conversation_id = ? AND is_outgoing = 1 AND status != ?',
+      whereArgs: [conversationId, MessageStatus.read.name],
+    );
+  }
+
+  /// Invia una read receipt al mittente dei messaggi in questa conversazione.
+  /// Il payload è un semplice JSON {"t":"rr"} cifrato con Double Ratchet —
+  /// il relay non sa nulla, vede solo un payload opaco come qualsiasi altro.
+  Future<void> sendReadReceipt(String conversationId) async {
+    try {
+      final profile = _profileService.currentProfile;
+      if (profile == null) return;
+
+      final conversation = await _conversationService.getConversation(conversationId);
+      if (conversation == null) return;
+
+      final contactRows = await _db.query(
+        'contacts', where: 'id = ?', whereArgs: [conversation.contactId],
+      );
+      if (contactRows.isEmpty) return;
+
+      final identityKey = contactRows.first['identity_key'] as String?;
+      if (identityKey == null) return;
+      final toHash = identityKey.length > 32
+          ? identityKey.substring(identityKey.length - 32)
+          : identityKey;
+
+      RatchetState? ratchetState =
+          await _conversationService.loadRatchetState(conversationId);
+      if (ratchetState == null) return;
+
+      final plaintext = Uint8List.fromList(utf8.encode('{"t":"rr"}'));
+      final enc = await _doubleRatchet.encrypt(ratchetState, plaintext);
+      await _conversationService.updateRatchetState(conversationId, enc.newState);
+
+      final headerJson = await _serializeMessageHeader(enc.header);
+      final outerPayload = base64Encode(utf8.encode(jsonEncode({
+        'ciphertext': base64Encode(enc.ciphertext),
+        'header': headerJson,
+      })));
+
+      await InvisibleClient().sendMessage(
+        toIdentityKeyHash: toHash,
+        encryptedPayload: outerPayload,
+      );
+      debugPrint('[MSG] Read receipt inviata a $toHash');
+    } catch (e) {
+      debugPrint('[MSG] Errore invio read receipt: $e');
+    }
   }
 
   Future<void> updateMessageStatus(

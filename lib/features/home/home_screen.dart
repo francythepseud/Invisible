@@ -6,6 +6,7 @@ import 'package:invisible/core/services/call_log_service.dart';
 import 'package:invisible/core/services/call_service.dart';
 import 'package:invisible/core/services/session_service.dart';
 import 'package:invisible/utils/constants.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:invisible/features/auth/screens/not_activated_screen.dart';
 import 'package:invisible/features/calls/screens/call_screen.dart';
 import 'package:invisible/features/calls/screens/calls_list_screen.dart';
@@ -38,8 +39,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _incomingCallSub = CallService().incomingCallStream.listen(_onIncomingCall);
     _notAuthorizedSub = InvisibleClient().notAuthorizedStream.listen((_) => _onNotAuthorized());
     _meshNotAuthorizedSub = MeshVpnService().notAuthorizedStream.listen((_) => _onNotAuthorized());
-    // Connette mesh VPN dopo che la schermata è visibile (Activity in foreground)
-    WidgetsBinding.instance.addPostFrameCallback((_) => _connectMesh());
+    // Connette mesh VPN e richiede permessi audio/video dopo che la schermata è visibile
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _connectMesh();
+      _requestMediaPermissions();
+    });
   }
 
   void _onNotAuthorized() {
@@ -48,6 +52,36 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const NotActivatedScreen()),
       (_) => false,
     );
+  }
+
+  /// Richiede microfono (e camera) al primo avvio — così iOS mostra il dialogo
+  /// prima che l'utente tenti una chiamata, senza richiedere azioni manuali.
+  Future<void> _requestMediaPermissions() async {
+    try {
+      final mic = await Permission.microphone.status;
+      if (mic.isDenied) await Permission.microphone.request();
+      final cam = await Permission.camera.status;
+      if (cam.isDenied) await Permission.camera.request();
+      // Se permanentemente negati apri le Impostazioni
+      final micDenied = await Permission.microphone.isPermanentlyDenied;
+      final camDenied = await Permission.camera.isPermanentlyDenied;
+      if ((micDenied || camDenied) && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Abilita microfono e fotocamera in Impostazioni per usare le chiamate',
+            ),
+            backgroundColor: AppConstants.error,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Impostazioni',
+              textColor: Colors.white,
+              onPressed: openAppSettings,
+            ),
+          ),
+        );
+      }
+    } catch (_) {}
   }
 
   void _connectMesh() {

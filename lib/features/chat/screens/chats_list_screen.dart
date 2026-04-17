@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:invisible/core/services/conversation_service.dart';
 import 'package:invisible/core/services/contact_service.dart';
+import 'package:invisible/core/services/session_service.dart';
 import 'package:invisible/models/conversation.dart';
 import 'package:invisible/models/contact.dart';
 import 'package:invisible/features/chat/screens/chat_screen.dart';
@@ -19,29 +21,39 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
   List<Conversation> _conversations = [];
   bool _isLoading = true;
+  StreamSubscription? _msgSubscription;
 
   @override
   void initState() {
     super.initState();
     _loadConversations();
+    // Aggiorna i badge in real-time quando arrivano messaggi
+    _msgSubscription = SessionService().anyMessageStream.listen((_) {
+      _loadConversations();
+    });
+  }
+
+  @override
+  void dispose() {
+    _msgSubscription?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadConversations() async {
     try {
       final conversations = await _conversationService.getConversations();
-      setState(() {
-        _conversations = conversations;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _conversations = conversations;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _startNewConversation() async {
-    // Mostra lista contatti per selezionare
     final contacts = await _contactService.getContacts();
 
     if (!mounted) return;
@@ -58,6 +70,10 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
 
     final selectedContact = await showModalBottomSheet<Contact>(
       context: context,
+      backgroundColor: AppConstants.surfaceBlack,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => _buildContactSelector(contacts),
     );
 
@@ -65,7 +81,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       final conversation = await _conversationService.getOrCreateConversation(
         selectedContact,
       );
-
       if (mounted) {
         Navigator.push(
           context,
@@ -78,53 +93,84 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   Widget _buildContactSelector(List<Contact> contacts) {
-    return Container(
-      padding: const EdgeInsets.all(AppConstants.paddingMedium),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Seleziona contatto',
-            style: Theme.of(context).textTheme.titleLarge,
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 40,
+          height: 4,
+          margin: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: AppConstants.textTertiary,
+            borderRadius: BorderRadius.circular(2),
           ),
-          const SizedBox(height: AppConstants.paddingMedium),
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: contacts.length,
-              itemBuilder: (context, index) {
-                final contact = contacts[index];
-                return ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppConstants.primaryBlue,
-                    child: Text(
-                      contact.name[0].toUpperCase(),
-                      style: const TextStyle(color: Colors.white),
-                    ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          child: Row(
+            children: [
+              const Text(
+                'Nuova chat',
+                style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w600,
+                  color: AppConstants.textPrimary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        Flexible(
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: contacts.length,
+            itemBuilder: (context, index) {
+              final contact = contacts[index];
+              final initial = contact.name.isNotEmpty
+                  ? contact.name[0].toUpperCase()
+                  : '?';
+              return ListTile(
+                leading: _buildAvatar(initial, contact.name),
+                title: Text(
+                  contact.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: AppConstants.textPrimary,
                   ),
-                  title: Text(contact.name),
-                  onTap: () => Navigator.pop(context, contact),
-                );
-              },
-            ),
+                ),
+                subtitle: const Text(
+                  'Cifrato end-to-end',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppConstants.success,
+                  ),
+                ),
+                onTap: () => Navigator.pop(context, contact),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 8),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppConstants.backgroundBlack,
       appBar: AppBar(
-        title: const Text('Chat'),
+        backgroundColor: AppConstants.surfaceBlack,
+        elevation: 0,
+        title: const Text(
+          'Chat',
+          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 22),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: () {
-              // TODO: Cerca chat
-            },
+            icon: const Icon(Icons.search_rounded),
+            onPressed: () {},
           ),
         ],
       ),
@@ -134,6 +180,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
               ? _buildEmptyState()
               : RefreshIndicator(
                   onRefresh: _loadConversations,
+                  color: AppConstants.primaryBlue,
                   child: ListView.builder(
                     itemCount: _conversations.length,
                     itemBuilder: (context, index) {
@@ -144,7 +191,7 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _startNewConversation,
         backgroundColor: AppConstants.primaryBlue,
-        child: const Icon(Icons.chat, color: Colors.white),
+        child: const Icon(Icons.chat_rounded, color: Colors.white),
       ),
     );
   }
@@ -156,21 +203,43 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.chat_bubble_outline,
-              size: 80,
-              color: AppConstants.textTertiary,
+            Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppConstants.primaryBlue.withValues(alpha: 0.3),
+                    AppConstants.primaryBlue.withValues(alpha: 0.1),
+                  ],
+                ),
+              ),
+              child: Icon(
+                Icons.chat_bubble_outline_rounded,
+                size: 48,
+                color: AppConstants.primaryBlue.withValues(alpha: 0.7),
+              ),
             ),
-            const SizedBox(height: AppConstants.paddingLarge),
-            Text(
+            const SizedBox(height: 24),
+            const Text(
               'Nessuna chat',
-              style: Theme.of(context).textTheme.headlineMedium,
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                color: AppConstants.textPrimary,
+              ),
             ),
-            const SizedBox(height: AppConstants.paddingSmall),
-            Text(
-              'Tocca + per iniziare una nuova conversazione crittografata',
+            const SizedBox(height: 8),
+            const Text(
+              'Tocca + per iniziare una conversazione cifrata',
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium,
+              style: TextStyle(
+                fontSize: 14,
+                color: AppConstants.textSecondary,
+              ),
             ),
           ],
         ),
@@ -179,72 +248,11 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   }
 
   Widget _buildConversationTile(Conversation conversation) {
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundColor: AppConstants.primaryBlue,
-        radius: 24,
-        child: Text(
-          conversation.contactName[0].toUpperCase(),
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-          ),
-        ),
-      ),
-      title: Row(
-        children: [
-          Expanded(
-            child: Text(
-              conversation.contactName,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          if (conversation.lastMessageTime != null)
-            Text(
-              _formatDate(conversation.lastMessageTime!),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-        ],
-      ),
-      subtitle: Row(
-        children: [
-          const Icon(
-            Icons.lock,
-            size: 12,
-            color: AppConstants.success,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Text(
-              conversation.lastMessageText ?? 'Chat crittografata',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: conversation.unreadCount > 0
-                    ? AppConstants.textPrimary
-                    : AppConstants.textSecondary,
-              ),
-            ),
-          ),
-          if (conversation.unreadCount > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppConstants.primaryBlue,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                conversation.unreadCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-        ],
-      ),
+    final name = conversation.contactName;
+    final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+    final hasUnread = conversation.unreadCount > 0;
+
+    return InkWell(
       onTap: () {
         Navigator.push(
           context,
@@ -253,28 +261,178 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
           ),
         ).then((_) => _loadConversations());
       },
-      onLongPress: () {
-        _showConversationOptions(conversation);
-      },
+      onLongPress: () => _showConversationOptions(conversation),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            _buildAvatar(initial, name),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          name,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: hasUnread
+                                ? FontWeight.w700
+                                : FontWeight.w500,
+                            color: AppConstants.textPrimary,
+                          ),
+                        ),
+                      ),
+                      if (conversation.lastMessageTime != null)
+                        Text(
+                          _formatDate(conversation.lastMessageTime!),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: hasUnread
+                                ? AppConstants.primaryBlue
+                                : AppConstants.textTertiary,
+                            fontWeight: hasUnread
+                                ? FontWeight.w600
+                                : FontWeight.normal,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.lock_rounded,
+                        size: 11,
+                        color: AppConstants.success,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          conversation.lastMessageText ?? 'Chat cifrata',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: hasUnread
+                                ? AppConstants.textPrimary
+                                : AppConstants.textSecondary,
+                            fontWeight: hasUnread
+                                ? FontWeight.w500
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                      if (hasUnread) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF42A5F5), Color(0xFF1565C0)],
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            conversation.unreadCount > 99
+                                ? '99+'
+                                : conversation.unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  Widget _buildAvatar(String initial, String name) {
+    final colors = _avatarColors(initial);
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          initial,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const _gradients = [
+    [Color(0xFF2196F3), Color(0xFF0D47A1)],
+    [Color(0xFF9C27B0), Color(0xFF4A148C)],
+    [Color(0xFF00BCD4), Color(0xFF006064)],
+    [Color(0xFF4CAF50), Color(0xFF1B5E20)],
+    [Color(0xFFFF5722), Color(0xFFBF360C)],
+    [Color(0xFFE91E63), Color(0xFF880E4F)],
+    [Color(0xFF607D8B), Color(0xFF263238)],
+    [Color(0xFFFF9800), Color(0xFFE65100)],
+  ];
+
+  List<Color> _avatarColors(String initial) {
+    final idx = initial.codeUnitAt(0) % _gradients.length;
+    return _gradients[idx];
   }
 
   void _showConversationOptions(Conversation conversation) {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppConstants.paddingMedium),
+      backgroundColor: AppConstants.surfaceBlack,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            Container(
+              width: 40,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: AppConstants.textTertiary,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
             ListTile(
-              leading: const Icon(Icons.delete, color: AppConstants.error),
-              title: const Text('Elimina chat'),
+              leading: const Icon(Icons.delete_outline_rounded,
+                  color: AppConstants.error),
+              title: const Text('Elimina chat',
+                  style: TextStyle(color: AppConstants.error)),
               onTap: () async {
                 Navigator.pop(context);
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
+                    backgroundColor: AppConstants.surfaceBlack,
                     title: const Text('Elimina chat'),
                     content: Text(
                       'Eliminare la conversazione con ${conversation.contactName}? '
@@ -285,25 +443,22 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
                         onPressed: () => Navigator.pop(context, false),
                         child: const Text('Annulla'),
                       ),
-                      ElevatedButton(
+                      TextButton(
                         onPressed: () => Navigator.pop(context, true),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppConstants.error,
-                        ),
+                        style: TextButton.styleFrom(
+                            foregroundColor: AppConstants.error),
                         child: const Text('Elimina'),
                       ),
                     ],
                   ),
                 );
-
                 if (confirm == true) {
-                  await _conversationService.deleteConversation(
-                    conversation.id,
-                  );
+                  await _conversationService.deleteConversation(conversation.id);
                   _loadConversations();
                 }
               },
             ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -313,7 +468,6 @@ class _ChatsListScreenState extends State<ChatsListScreen> {
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final diff = now.difference(date);
-
     if (diff.inDays == 0) {
       return '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
     } else if (diff.inDays == 1) {

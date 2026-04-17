@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:invisible/core/crypto/crypto_service.dart';
-import 'package:invisible/core/crypto/x3dh.dart';
 import 'package:invisible/core/crypto/double_ratchet.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/conversation.dart';
@@ -18,7 +17,6 @@ class ConversationService {
 
   final _profileService = ProfileService();
   final _cryptoService = CryptoService();
-  final _x3dh = X3DH();
   final _doubleRatchet = DoubleRatchet();
 
   /// Ottiene il database corrente
@@ -30,13 +28,27 @@ class ConversationService {
     return db;
   }
 
-  /// Ottiene tutte le conversazioni ordinate per ultimo messaggio
+  /// Ottiene tutte le conversazioni ordinate per ultimo messaggio.
+  /// Pulisce automaticamente eventuali residui di read receipt nei metadati.
   Future<List<Conversation>> getConversations() async {
     final maps = await _db.query(
       'conversations',
       orderBy: 'last_message_time DESC',
     );
-    return maps.map((map) => Conversation.fromMap(map)).toList();
+    // Pulizia dati storici: se lastMessageText è una receipt, ripristina
+    for (final map in maps) {
+      final lastText = map['last_message_text'] as String?;
+      if (lastText != null && lastText.contains('"t":"rr"')) {
+        final convId = map['id'] as String;
+        await refreshLastMessage(convId);
+      }
+    }
+    // Rileggi dopo le eventuali correzioni
+    final cleaned = await _db.query(
+      'conversations',
+      orderBy: 'last_message_time DESC',
+    );
+    return cleaned.map((map) => Conversation.fromMap(map)).toList();
   }
 
   /// Ottiene una conversazione specifica
@@ -79,8 +91,8 @@ class ConversationService {
   }
 
   /// Inizializza sessione crittografica come mittente.
-  /// Esegue X3DH con chiavi separate (masterKey come DH identity,
-  /// signedPreKey come SPK distinta) poi inizializza Double Ratchet.
+  /// Usa ECDH statico simmetrico (senza chiavi effimere) così entrambi i lati
+  /// possono derivare lo stesso sharedSecret indipendentemente.
   Future<RatchetState> initializeSession({
     required String conversationId,
     required String theirPublicKeyBase64,
@@ -96,14 +108,18 @@ class ConversationService {
       base64Decode(keysMap['master_key_public'] as String),
     );
 
+    // SPK locale (chiave DH separata)
+    final mySpkKeyPair = await _generateKeyPairFromBytes(
+      base64Decode(keysMap['signed_pre_key_private'] as String),
+      base64Decode(keysMap['signed_pre_key_public'] as String),
+    );
+
     // Identity pubkey del destinatario (X25519 master key)
     final theirIdentityKey = SimplePublicKey(
       base64Decode(theirPublicKeyBase64),
       type: KeyPairType.x25519,
     );
 
-    // Usa la signed pre-key separata del contatto se disponibile,
-    // altrimenti fall-back alla master key (compatibilità con vecchi contatti)
     final theirSpkBytes = theirSignedPreKeyBase64 != null
         ? base64Decode(theirSignedPreKeyBase64)
         : base64Decode(theirPublicKeyBase64);
@@ -112,19 +128,96 @@ class ConversationService {
       type: KeyPairType.x25519,
     );
 
-    final x3dhResult = await _x3dh.performAsInitiator(
-      myIdentityKey: myIdentityKeyPair,
+    // Shared secret simmetrico: entrambi i lati possono derivarlo indipendentemente
+    // perché DH è commutativo: DH(A_priv, B_pub) == DH(B_priv, A_pub)
+    final sharedSecret = await _computeSymmetricSharedSecret(
+      myIdentityKeyPair: myIdentityKeyPair,
+      mySpkKeyPair: mySpkKeyPair,
       theirIdentityKey: theirIdentityKey,
-      theirSignedPreKey: theirSignedPreKey,
+      theirSpk: theirSignedPreKey,
     );
 
     final ratchetState = await _doubleRatchet.initializeAsSender(
-      sharedSecret: x3dhResult.sharedSecret,
+      sharedSecret: sharedSecret,
       theirRatchetPublicKey: theirSignedPreKey,
     );
 
     await _saveRatchetState(conversationId, ratchetState);
     return ratchetState;
+  }
+
+  /// Inizializza sessione crittografica come ricevente.
+  /// Chiamato quando arriva il primo messaggio e non esiste ancora ratchet state.
+  Future<RatchetState> initializeSessionAsReceiver({
+    required String conversationId,
+    required String theirMasterKeyBase64,
+    required String theirSpkBase64,
+  }) async {
+    final keysMaps = await _db.query('crypto_keys');
+    if (keysMaps.isEmpty) throw Exception('No crypto keys found');
+    final keysMap = keysMaps.first;
+
+    final myIdentityKeyPair = await _generateKeyPairFromBytes(
+      base64Decode(keysMap['master_key_private'] as String),
+      base64Decode(keysMap['master_key_public'] as String),
+    );
+    final mySpkKeyPair = await _generateKeyPairFromBytes(
+      base64Decode(keysMap['signed_pre_key_private'] as String),
+      base64Decode(keysMap['signed_pre_key_public'] as String),
+    );
+
+    final theirIdentityKey = SimplePublicKey(
+      base64Decode(theirMasterKeyBase64),
+      type: KeyPairType.x25519,
+    );
+    final theirSpkBytes = theirSpkBase64.isNotEmpty
+        ? base64Decode(theirSpkBase64)
+        : base64Decode(theirMasterKeyBase64);
+    final theirSpk = SimplePublicKey(theirSpkBytes, type: KeyPairType.x25519);
+
+    // Stesso calcolo del lato mittente — simmetrico per costruzione
+    final sharedSecret = await _computeSymmetricSharedSecret(
+      myIdentityKeyPair: myIdentityKeyPair,
+      mySpkKeyPair: mySpkKeyPair,
+      theirIdentityKey: theirIdentityKey,
+      theirSpk: theirSpk,
+    );
+
+    final ratchetState = await _doubleRatchet.initializeAsReceiver(
+      sharedSecret: sharedSecret,
+      ourRatchetKeyPair: mySpkKeyPair,
+    );
+
+    await _saveRatchetState(conversationId, ratchetState);
+    return ratchetState;
+  }
+
+  /// Derivazione ECDH simmetrica: stesso risultato da entrambi i lati.
+  ///
+  /// Usa solo DH(myIdentity, theirIdentity) che è trivialmente simmetrico:
+  ///   DH(A_priv, B_pub) == DH(B_priv, A_pub)
+  /// Il Double Ratchet garantisce forward secrecy dopo l'handshake iniziale.
+  Future<Uint8List> _computeSymmetricSharedSecret({
+    required SimpleKeyPair myIdentityKeyPair,
+    required SimpleKeyPair mySpkKeyPair,
+    required PublicKey theirIdentityKey,
+    required PublicKey theirSpk,
+  }) async {
+    final x25519 = X25519();
+    final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
+
+    // DH simmetrico identity-to-identity: stesso valore da entrambi i lati
+    final dh = await (await x25519.sharedSecretKey(
+      keyPair: myIdentityKeyPair,
+      remotePublicKey: theirIdentityKey,
+    )).extractBytes();
+
+    final derived = await hkdf.deriveKey(
+      secretKey: SecretKey(Uint8List.fromList(dh)),
+      nonce: Uint8List(32),
+      info: utf8.encode('Invisible-X3DH'),
+    );
+    return Uint8List.fromList(await derived.extractBytes());
   }
 
   /// Carica stato ratchet dal database
@@ -274,6 +367,47 @@ class ConversationService {
       where: 'id = ?',
       whereArgs: [conversationId],
     );
+  }
+
+  /// Decrementa contatore messaggi non letti (minimo 0)
+  Future<void> decrementUnreadCount(String conversationId) async {
+    await _db.rawUpdate(
+      'UPDATE conversations SET unread_count = MAX(0, unread_count - 1) WHERE id = ?',
+      [conversationId],
+    );
+  }
+
+  /// Ripristina lastMessageText dalla tabella messages (usato dopo cancellazione receipt)
+  Future<void> refreshLastMessage(String conversationId) async {
+    final rows = await _db.query(
+      'messages',
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+      orderBy: 'timestamp DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) {
+      await _db.update(
+        'conversations',
+        {'last_message_text': null, 'last_message_time': null},
+        where: 'id = ?',
+        whereArgs: [conversationId],
+      );
+    } else {
+      final row = rows.first;
+      final text = row['decrypted_text'] as String? ?? '';
+      final timestamp = row['timestamp'] as String? ?? DateTime.now().toIso8601String();
+      await _db.update(
+        'conversations',
+        {
+          'last_message_text': text.length > 60 ? text.substring(0, 60) : text,
+          'last_message_time': timestamp,
+          'updated_at': DateTime.now().toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [conversationId],
+      );
+    }
   }
 
   /// Elimina una conversazione

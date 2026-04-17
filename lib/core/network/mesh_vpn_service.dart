@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
@@ -71,6 +72,11 @@ class MeshVpnService {
 
   /// Connette alla rete mesh. [gatewayHttpUrl] es. https://vps.example.com/v1/mesh
   Future<MeshConfig> connect(String gatewayHttpUrl) async {
+    // WireGuard Network Extension richiede Apple Developer Program su macOS
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      _updateStatus(MeshStatus.error);
+      throw Exception('Mesh non disponibile su macOS senza Developer Program');
+    }
     _updateStatus(MeshStatus.connecting);
     try {
       // 1. Ottieni/genera WireGuard keypair locale

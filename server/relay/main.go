@@ -208,8 +208,8 @@ func (r *Registry) Get(id string) (*Connection, bool) {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin:     func(*http.Request) bool { return true },
-	ReadBufferSize:  8192,
-	WriteBufferSize: 8192,
+	ReadBufferSize:  32768,
+	WriteBufferSize: 32768,
 }
 
 type Server struct {
@@ -253,7 +253,7 @@ func (s *Server) ServeWS(w http.ResponseWriter, r *http.Request) {
 		wsConn.Close()
 	}()
 
-	wsConn.SetReadLimit(256 * 1024) // max 256 KB per messaggio
+	wsConn.SetReadLimit(10 * 1024 * 1024) // max 10 MB per messaggio (supporta immagini/file cifrati)
 	wsConn.SetReadDeadline(time.Now().Add(90 * time.Second))
 	wsConn.SetPongHandler(func(string) error {
 		wsConn.SetReadDeadline(time.Now().Add(90 * time.Second))

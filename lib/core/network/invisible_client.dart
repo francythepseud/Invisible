@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show WebSocket;
 import 'dart:math';
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:invisible/core/network/pinned_http_client.dart';
@@ -100,6 +101,7 @@ class InvisibleClient {
       // Connessione riuscita: richiedi il challenge
       _send({'type': 'get_challenge'});
     } catch (e) {
+      debugPrint('[RELAY] Connessione fallita: $e');
       _scheduleReconnect();
     }
   }
@@ -113,6 +115,7 @@ class InvisibleClient {
         case 'challenge':
           await _handleChallenge(msg['challenge'] as String);
         case 'auth_ok':
+          debugPrint('[RELAY] auth_ok — connesso');
           _updateStatus(RelayStatus.connected);
           _currentReconnectDelay = _reconnectDelay;
           _startPing();
@@ -123,6 +126,7 @@ class InvisibleClient {
           _intentionalDisconnect = true;
           await disconnect();
         case 'deliver':
+          debugPrint('[RELAY] deliver ricevuto da from=${msg['from']}');
           _handleDeliver(msg);
         case 'presence':
           final userId = msg['from'] as String?;
@@ -138,8 +142,8 @@ class InvisibleClient {
         case 'error':
           break;
       }
-    } catch (_) {
-      // Messaggio malformato — ignoriamo
+    } catch (e) {
+      debugPrint('[RELAY] Errore parsing messaggio: $e');
     }
   }
 
@@ -176,10 +180,13 @@ class InvisibleClient {
         msgId: msg['msg_id'] as String,
         timestamp: DateTime.parse(msg['timestamp'] as String),
       );
+      debugPrint('[RELAY] _handleDeliver OK fromId=${incoming.fromId} msgId=${incoming.msgId}');
       _messageController.add(incoming);
       // Invia ACK al server per confermare ricezione
       _send({'type': 'ack', 'msg_id': incoming.msgId});
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[RELAY] _handleDeliver errore: $e  msg=$msg');
+    }
   }
 
   /// Invia un messaggio E2E cifrato al destinatario.

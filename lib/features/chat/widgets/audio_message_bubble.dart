@@ -20,53 +20,73 @@ class AudioMessageBubble extends StatefulWidget {
 }
 
 class _AudioMessageBubbleState extends State<AudioMessageBubble> {
-  final _player = AudioPlayer();
+  AudioPlayer? _player;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
+  bool _disposed = false;
 
   @override
   void initState() {
     super.initState();
-    _player.onDurationChanged.listen((d) {
-      if (mounted) setState(() => _duration = d);
-    });
-    _player.onPositionChanged.listen((pos) {
-      if (mounted) setState(() => _position = pos);
-    });
-    _player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() { _isPlaying = false; _position = Duration.zero; });
-    });
-    // Pre-carica la durata senza riprodurre
-    _preload();
+    _initPlayer();
+  }
+
+  void _initPlayer() {
+    try {
+      _player = AudioPlayer();
+      _player!.onDurationChanged.listen((d) {
+        if (mounted && !_disposed) setState(() => _duration = d);
+      });
+      _player!.onPositionChanged.listen((pos) {
+        if (mounted && !_disposed) setState(() => _position = pos);
+      });
+      _player!.onPlayerComplete.listen((_) {
+        if (mounted && !_disposed) setState(() { _isPlaying = false; _position = Duration.zero; });
+      });
+      _preload();
+    } catch (e) {
+      debugPrint('[AUDIO] initPlayer error: $e');
+    }
   }
 
   Future<void> _preload() async {
+    if (_disposed || _player == null) return;
     try {
       if (File(widget.localPath).existsSync()) {
-        await _player.setSource(DeviceFileSource(widget.localPath));
+        await _player!.setSource(DeviceFileSource(widget.localPath));
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[AUDIO] preload error: $e');
+    }
   }
 
   @override
   void dispose() {
-    _player.dispose();
+    _disposed = true;
+    try {
+      _player?.dispose();
+    } catch (_) {}
+    _player = null;
     super.dispose();
   }
 
   Future<void> _togglePlayback() async {
+    if (_player == null || _disposed) return;
     if (!File(widget.localPath).existsSync()) return;
-    if (_isPlaying) {
-      await _player.pause();
-      setState(() => _isPlaying = false);
-    } else {
-      // Se è finito, riparti dall'inizio
-      if (_duration > Duration.zero && _position >= _duration) {
-        await _player.seek(Duration.zero);
+    try {
+      if (_isPlaying) {
+        await _player!.pause();
+        if (mounted) setState(() => _isPlaying = false);
+      } else {
+        if (_duration > Duration.zero && _position >= _duration) {
+          await _player!.seek(Duration.zero);
+        }
+        await _player!.play(DeviceFileSource(widget.localPath));
+        if (mounted) setState(() => _isPlaying = true);
       }
-      await _player.play(DeviceFileSource(widget.localPath));
-      setState(() => _isPlaying = true);
+    } catch (e) {
+      debugPrint('[AUDIO] playback error: $e');
     }
   }
 
@@ -133,11 +153,12 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
                   child: Slider(
                     value: progress,
                     onChanged: (v) async {
+                      if (_player == null || _disposed) return;
                       final seek = Duration(
                         milliseconds:
                             (v * _duration.inMilliseconds).round(),
                       );
-                      await _player.seek(seek);
+                      try { await _player!.seek(seek); } catch (_) {}
                     },
                   ),
                 ),

@@ -42,6 +42,7 @@ class _CallScreenState extends State<CallScreen> {
   bool _isSpeakerOn = false;
   bool _isCameraOff = false;
   bool _isConnecting = true;
+  bool _isNavigatingAway = false;
 
   int _seconds = 0;
   Timer? _timer;
@@ -78,7 +79,8 @@ class _CallScreenState extends State<CallScreen> {
     });
 
     _callStateSub = _callService.callStateStream.listen((state) {
-      if (state == CallState.ended && mounted) {
+      if (state == CallState.ended && mounted && !_isNavigatingAway) {
+        _isNavigatingAway = true;
         Navigator.of(context).pop();
       }
     });
@@ -103,14 +105,14 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   void _saveCallLog() {
-    if (_seconds == 0) return; // non salvare se la chiamata non è mai partita
+    final status = _seconds > 0 ? CallStatus.completed : CallStatus.missed;
     CallLogService().saveEntry(CallLogEntry(
       id: const Uuid().v4(),
       contactId: widget.contactId,
       contactName: widget.contactName,
       callType: widget.isVideo ? CallType.video : CallType.audio,
       direction: widget.isOutgoing ? CallDirection.outgoing : CallDirection.incoming,
-      status: CallStatus.completed,
+      status: status,
       durationSeconds: _seconds,
       startedAt: DateTime.now().subtract(Duration(seconds: _seconds)),
     ));
@@ -130,13 +132,17 @@ class _CallScreenState extends State<CallScreen> {
 
   void _toggleSpeaker() {
     _isSpeakerOn = !_isSpeakerOn;
-    _callService.enableSpeaker(_isSpeakerOn);
+    _callService.enableSpeaker(_isSpeakerOn).then((_) {
+      if (mounted) setState(() {});
+    });
     setState(() {});
   }
 
   void _switchCamera() => _callService.switchCamera();
 
   void _hangUp() {
+    if (_isNavigatingAway) return;
+    _isNavigatingAway = true;
     _callService.hangUp();
     if (mounted) Navigator.of(context).pop();
   }

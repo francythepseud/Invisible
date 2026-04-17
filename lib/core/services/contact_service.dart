@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:invisible/core/crypto/crypto_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/contact.dart';
@@ -45,6 +46,15 @@ class ContactService {
       throw Exception('Chiave pubblica non valida');
     }
 
+    // Impedisci di aggiungere se stessi come contatto
+    final ownKeys = await _profileService.getCurrentCryptoKeys();
+    if (ownKeys != null) {
+      if (publicKey == ownKeys.masterKeyPublic ||
+          (identityKey != null && identityKey == ownKeys.identityKeyPublic)) {
+        throw Exception('Non puoi aggiungere te stesso come contatto');
+      }
+    }
+
     // Verifica firma SPK se il QR include le chiavi complete
     if (identityKey != null && signedPreKey != null && signedPreKeySig != null) {
       final valid = await _cryptoService.verifySignature(
@@ -76,6 +86,10 @@ class ContactService {
     );
 
     await db.insert('contacts', contact.toJson());
+    final ikShort = identityKey != null && identityKey.length > 32
+        ? identityKey.substring(identityKey.length - 32)
+        : identityKey ?? '';
+    debugPrint('[CONTACT] addContact OK name=$name ik_short=$ikShort');
     return contact;
   }
 
@@ -121,11 +135,31 @@ class ContactService {
       throw Exception('Nessun database aperto');
     }
 
-    await db.delete(
-      'contacts',
-      where: 'id = ?',
+    // Trova le conversazioni associate al contatto
+    final conversations = await db.query(
+      'conversations',
+      where: 'contact_id = ?',
       whereArgs: [contactId],
     );
+
+    for (final conv in conversations) {
+      final convId = conv['id'] as String;
+      // Elimina media prima dei messaggi (FK)
+      final msgIds = await db.query('messages', columns: ['id'], where: 'conversation_id = ?', whereArgs: [convId]);
+      for (final m in msgIds) {
+        await db.delete('media', where: 'message_id = ?', whereArgs: [m['id']]);
+      }
+      // Elimina messaggi
+      await db.delete('messages', where: 'conversation_id = ?', whereArgs: [convId]);
+      // Elimina stato ratchet
+      await db.delete('ratchet_states', where: 'conversation_id = ?', whereArgs: [convId]);
+    }
+
+    // Elimina le conversazioni
+    await db.delete('conversations', where: 'contact_id = ?', whereArgs: [contactId]);
+
+    // Elimina il contatto
+    await db.delete('contacts', where: 'id = ?', whereArgs: [contactId]);
   }
 
   /// Blocca/sblocca un contatto

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:invisible/core/crypto/crypto_service.dart';
 import 'package:invisible/core/network/invisible_client.dart';
@@ -37,6 +38,14 @@ class SessionService {
   // Per-conversation stream: ChatScreen si iscrive per aggiornamenti real-time
   final Map<String, StreamController<Message>> _convStreams = {};
   StreamSubscription<IncomingRelayMessage>? _relaySubscription;
+
+  // Global stream: ChatsListScreen si iscrive per aggiornare i badge in real-time
+  final _anyMessageController = StreamController<Message>.broadcast();
+  Stream<Message> get anyMessageStream => _anyMessageController.stream;
+
+  // Read receipt stream: conversationId quando l'altro ha letto
+  final _readReceiptController = StreamController<String>.broadcast();
+  Stream<String> get readReceiptStream => _readReceiptController.stream;
 
   InvisibleClient get relay => _relay;
   MeshVpnService get mesh => _mesh;
@@ -98,8 +107,13 @@ class SessionService {
       if (db == null) return;
 
       // Trova il contatto corrispondente all'identity hash del mittente
+      debugPrint('[SESSION] Messaggio in arrivo da fromId=${incoming.fromId}');
       final contact = await _findContactByIdentityHash(incoming.fromId, db);
-      if (contact == null) return;
+      if (contact == null) {
+        debugPrint('[SESSION] Contatto non trovato per fromId=${incoming.fromId}');
+        return;
+      }
+      debugPrint('[SESSION] Contatto trovato: ${contact.name}');
 
       // Il payload esterno è JSON base64: {"ciphertext":"...","header":"..."}
       // Tipo e media sono dentro il plaintext DR — il relay non li ha mai visti
@@ -115,12 +129,29 @@ class SessionService {
           await _conversationService.getOrCreateConversation(contact);
 
       // Decripta e salva il messaggio (tipo estratto dal plaintext DR)
+      debugPrint('[SESSION] Decripto messaggio per conversazione ${conversation.id}');
       final message = await _messageService.receiveMessage(
         conversationId: conversation.id,
         ciphertextBase64: ciphertext,
         headerJson: headerJson,
         senderId: contact.id,
       );
+      debugPrint('[SESSION] Messaggio decriptato OK: ${message.id}');
+
+      // Se è una read receipt, aggiorna i messaggi uscenti e notifica la UI
+      if (message.decryptedText == '{"t":"rr"}' || message.decryptedText?.trim() == '{"t":"rr"}') {
+        debugPrint('[SESSION] Read receipt ricevuta per conversazione ${conversation.id}');
+        await _messageService.markOutgoingMessagesAsRead(conversation.id);
+        // Cancella il messaggio rr dal DB (non va mostrato in chat)
+        await _messageService.deleteMessage(message.id);
+        // receiveMessage ha già incrementato unread_count e lastMessageText: correggiamo
+        await _conversationService.decrementUnreadCount(conversation.id);
+        await _conversationService.refreshLastMessage(conversation.id);
+        if (!_readReceiptController.isClosed) {
+          _readReceiptController.add(conversation.id);
+        }
+        return;
+      }
 
       // Notifica il ChatScreen se è aperto su questa conversazione
       final ctrl = _convStreams[conversation.id];
@@ -128,10 +159,15 @@ class SessionService {
         ctrl.add(message);
       }
 
+      // Notifica globale (ChatsListScreen per aggiornare badge)
+      if (!_anyMessageController.isClosed) {
+        _anyMessageController.add(message);
+      }
+
       // Mostra notifica locale anonima (solo se l'utente l'ha abilitata)
       NotificationService().showMessageNotification();
-    } catch (_) {
-      // Ignora errori di decriptazione
+    } catch (e, st) {
+      debugPrint('[SESSION] Errore ricezione messaggio: $e\n$st');
     }
   }
 
@@ -145,7 +181,9 @@ class SessionService {
     for (final row in rows) {
       final ik = row['identity_key'] as String?;
       if (ik == null) continue;
-      final computed = _sha256Hex(ik);
+      // Il relay usa shortHash: ultimi 32 caratteri della identity key base64
+      final computed = ik.length > 32 ? ik.substring(ik.length - 32) : ik;
+      debugPrint('[SESSION] Confronto hash=$hash vs computed=$computed (ik len=${ik.length})');
       if (computed == hash) return Contact.fromJson(row);
     }
     return null;
