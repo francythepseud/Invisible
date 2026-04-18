@@ -69,8 +69,20 @@ class SignalingClient {
   Future<void> _doConnect() async {
     try {
       _channel = WebSocketChannel.connect(Uri.parse(_signalingUrl!));
-      _channel!.stream.listen(_onMessage, onError: _onError, onDone: _onDone);
-      // Il server invia il challenge immediatamente — non serve get_challenge
+      // cancelOnError: false → rimane in ascolto dopo un errore transitorio
+      _channel!.stream.listen(
+        _onMessage,
+        onError: _onError,
+        onDone: _onDone,
+        cancelOnError: false,
+      );
+      // Aspetta la connessione: cattura WebSocketChannelException qui invece
+      // di lasciarla propagare al zone error handler
+      await _channel!.ready.catchError((e) {
+        debugPrint('[SIGNAL] WebSocket ready error: $e');
+        _connected = false;
+        _scheduleReconnect();
+      });
     } catch (e) {
       debugPrint('[SIGNAL] Connessione fallita: $e');
       _scheduleReconnect();
@@ -233,7 +245,8 @@ class SignalingClient {
     _pingTimer = Timer.periodic(_pingInterval, (_) => _send({'type': 'ping'}));
   }
 
-  void _onError(Object _) {
+  void _onError(Object error, [StackTrace? _]) {
+    debugPrint('[SIGNAL] stream error: $error');
     _connected = false;
     _scheduleReconnect();
   }

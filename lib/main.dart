@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -55,21 +56,23 @@ void main() {
     (error, stack) {
       debugPrint('[STARTUP] ZONE ERROR: $error\n$stack');
       ErrorReportingService().onZoneError(error, stack);
-      // Mostra errore su schermo invece di crashare silenziosamente
-      runApp(MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.black,
-          body: SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: SelectableText(
-                'CRASH\n\n$error\n\n$stack',
-                style: const TextStyle(color: Colors.red, fontSize: 11, fontFamily: 'monospace'),
+      // Mostra errore su schermo solo in debug — in release logga e basta
+      if (kDebugMode) {
+        runApp(MaterialApp(
+          home: Scaffold(
+            backgroundColor: Colors.black,
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: SelectableText(
+                  'CRASH\n\n$error\n\n$stack',
+                  style: const TextStyle(color: Colors.red, fontSize: 11, fontFamily: 'monospace'),
+                ),
               ),
             ),
           ),
-        ),
-      ));
+        ));
+      }
     },
   );
 }
