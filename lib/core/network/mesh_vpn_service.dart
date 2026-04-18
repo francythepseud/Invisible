@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cryptography/cryptography.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:wireguard_flutter/wireguard_flutter.dart';
 import 'package:invisible/core/services/profile_service.dart';
@@ -46,11 +45,11 @@ class MeshVpnService {
   factory MeshVpnService() => _instance;
   MeshVpnService._internal();
 
-  static const _wgPrivKeyStorage = 'wg_private_key';
-  static const _wgPubKeyStorage = 'wg_public_key';
+  // WireGuard keypair efimera — non salvata, nuova ad ogni connessione.
+  // Impedisce la correlazione tra sessioni diverse anche se il gateway
+  // venisse compromesso in seguito.
 
   final _profileService = ProfileService();
-  final _secureStorage = const FlutterSecureStorage();
   final _statusController = StreamController<MeshStatus>.broadcast();
   final _notAuthorizedController = StreamController<void>.broadcast();
 
@@ -122,23 +121,18 @@ class MeshVpnService {
     _updateStatus(MeshStatus.disconnected);
   }
 
-  // ─── Keypair WireGuard ───────────────────────────────────────────────────
+  // ─── Keypair WireGuard efimera ───────────────────────────────────────────
 
+  /// Genera una nuova Curve25519 keypair WireGuard ad ogni connessione.
+  /// Non viene mai salvata — ogni sessione ha una chiave diversa.
   Future<_WgKeyPair> _getOrCreateWgKeys() async {
-    final stored = await _secureStorage.read(key: _wgPrivKeyStorage);
-    if (stored != null) {
-      final pub = await _secureStorage.read(key: _wgPubKeyStorage) ?? '';
-      return _WgKeyPair(privateKey: stored, publicKey: pub);
-    }
-    // Genera una nuova Curve25519 keypair per WireGuard
     final kp = await X25519().newKeyPair();
     final privBytes = await kp.extractPrivateKeyBytes();
     final pubBytes = (await kp.extractPublicKey()).bytes;
-    final priv = base64Encode(privBytes);
-    final pub = base64Encode(pubBytes);
-    await _secureStorage.write(key: _wgPrivKeyStorage, value: priv);
-    await _secureStorage.write(key: _wgPubKeyStorage, value: pub);
-    return _WgKeyPair(privateKey: priv, publicKey: pub);
+    return _WgKeyPair(
+      privateKey: base64Encode(privBytes),
+      publicKey: base64Encode(pubBytes),
+    );
   }
 
   // ─── HTTP calls al mesh-gateway ──────────────────────────────────────────

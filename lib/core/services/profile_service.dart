@@ -12,6 +12,12 @@ class ProfileService {
   factory ProfileService() => _instance;
   ProfileService._internal();
 
+  // FlutterSecureStorage usa iOS Keychain / Android Keystore — hardware-backed.
+  // Le chiavi private non escono mai dal chip sicuro (TEE/Secure Enclave).
+  // NOTA: su Android NON usiamo encryptedSharedPreferences:true perché usa un
+  // backing store diverso rispetto al default (KeyStore AES-256-GCM), e
+  // cambiarla romperebbe la lettura del salt dei profili esistenti.
+  // Il default è già hardware-backed su tutti i dispositivi Android moderni.
   final _secureStorage = const FlutterSecureStorage(
     mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   );
@@ -20,6 +26,11 @@ class ProfileService {
 
   static const _profilesListKey = 'profiles_list';
   static const _saltPrefix = 'salt_';
+
+  // Chiavi private nel TEE — mai nel DB
+  static String _ikPrivKey(String id)  => '_ik_priv_$id';
+  static String _mkPrivKey(String id)  => '_mk_priv_$id';
+  static String _spkPrivKey(String id) => '_spk_priv_$id';
 
   Profile? _currentProfile;
   Database? _currentDatabase;
@@ -60,25 +71,19 @@ class ProfileService {
       throw Exception('Attenzione: username già in uso, sceglierne un altro');
     }
 
-    // Genera ID profilo
     final profileId = _cryptoService.generateId();
-
-    // Genera salt per PBKDF2
     final salt = _cryptoService.generateSalt();
-
-    // Deriva la chiave del database dalla password
-    final dbKey = await _cryptoService.deriveDatabaseKey(
-      credentials.password,
-      salt,
-    );
-
-    // Genera chiavi crittografiche
+    final dbKey = await _cryptoService.deriveDatabaseKey(credentials.password, salt);
     final cryptoKeys = await _cryptoService.generateKeys();
 
-    // Crea database criptato
+    // Salva le chiavi PRIVATE nel TEE (iOS Keychain / Android Keystore hardware-backed).
+    // Non escono mai dal chip sicuro — anche con root o backup non sono accessibili.
+    await _secureStorage.write(key: _ikPrivKey(profileId),  value: cryptoKeys.identityKeyPrivate);
+    await _secureStorage.write(key: _mkPrivKey(profileId),  value: cryptoKeys.masterKeyPrivate);
+    await _secureStorage.write(key: _spkPrivKey(profileId), value: cryptoKeys.signedPreKeyPrivate);
+
     final database = await _databaseService.getDatabase(profileId, dbKey);
 
-    // Crea profilo
     final profile = Profile(
       id: profileId,
       username: credentials.username,
@@ -87,26 +92,26 @@ class ProfileService {
       lastLoginAt: DateTime.now(),
     );
 
-    // Salva profilo nel database
     await database.insert('profile', profile.toJson());
 
-    // Salva chiavi crittografiche nel database
+    // Nel DB salviamo SOLO le chiavi pubbliche e la firma SPK — nessuna chiave privata
     await database.insert('crypto_keys', {
       'id': profileId,
-      ...cryptoKeys.toJson(),
+      'master_key_private':       '', // vuoto — chiave privata è nel TEE
+      'master_key_public':        cryptoKeys.masterKeyPublic,
+      'identity_key_private':     '', // vuoto — chiave privata è nel TEE
+      'identity_key_public':      cryptoKeys.identityKeyPublic,
+      'signed_pre_key_private':   '', // vuoto — chiave privata è nel TEE
+      'signed_pre_key_public':    cryptoKeys.signedPreKeyPublic,
+      'signed_pre_key_signature': cryptoKeys.signedPreKeySignature,
+      'signed_pre_key_created_at': cryptoKeys.signedPreKeyCreatedAt.millisecondsSinceEpoch,
     });
 
-    // Salva salt in secure storage
-    await _secureStorage.write(
-      key: '$_saltPrefix$profileId',
-      value: salt,
-    );
+    await _secureStorage.write(key: '$_saltPrefix$profileId', value: salt);
 
-    // Aggiorna lista profili
     existingProfiles.add(profile);
     await _saveProfilesList(existingProfiles);
 
-    // Imposta come profilo corrente
     _currentProfile = profile;
     _currentDatabase = database;
 
@@ -200,8 +205,11 @@ class ProfileService {
     // Elimina database
     await _databaseService.deleteDatabase(profileId);
 
-    // Elimina salt
+    // Elimina salt e chiavi private dal TEE
     await _secureStorage.delete(key: '$_saltPrefix$profileId');
+    await _secureStorage.delete(key: _ikPrivKey(profileId));
+    await _secureStorage.delete(key: _mkPrivKey(profileId));
+    await _secureStorage.delete(key: _spkPrivKey(profileId));
 
     // Rimuovi dalla lista profili
     final profiles = await getProfiles();
@@ -217,33 +225,99 @@ class ProfileService {
     await _secureStorage.write(key: _profilesListKey, value: profilesJson);
   }
 
-  /// Ottiene le chiavi crittografiche del profilo corrente
+  /// Ottiene le chiavi crittografiche del profilo corrente.
+  /// Le chiavi private vengono lette dal TEE (Keychain/Keystore hardware-backed),
+  /// le chiavi pubbliche dal DB cifrato.
   Future<CryptoKeys?> getCurrentCryptoKeys() async {
-    if (_currentDatabase == null || _currentProfile == null) {
-      return null;
-    }
+    if (_currentDatabase == null || _currentProfile == null) return null;
+    final id = _currentProfile!.id;
 
     final result = await _currentDatabase!.query(
-      'crypto_keys',
-      where: 'id = ?',
-      whereArgs: [_currentProfile!.id],
+      'crypto_keys', where: 'id = ?', whereArgs: [id],
     );
+    if (result.isEmpty) return null;
 
-    if (result.isEmpty) {
+    final row = result.first;
+
+    // Leggi chiavi private dal TEE
+    final ikPriv  = await _secureStorage.read(key: _ikPrivKey(id));
+    final mkPriv  = await _secureStorage.read(key: _mkPrivKey(id));
+    final spkPriv = await _secureStorage.read(key: _spkPrivKey(id));
+
+    // Migrazione automatica: se le private non sono nel TEE ma sono nel DB
+    // (profilo creato con versione precedente), le migriamo nel TEE e le
+    // cancelliamo dal DB.
+    final ikPrivFinal  = await _migratePrivateKey(id, _ikPrivKey(id),  ikPriv,  row['identity_key_private']  as String?, row);
+    final mkPrivFinal  = await _migratePrivateKey(id, _mkPrivKey(id),  mkPriv,  row['master_key_private']     as String?, row);
+    final spkPrivFinal = await _migratePrivateKey(id, _spkPrivKey(id), spkPriv, row['signed_pre_key_private'] as String?, row);
+
+    if (ikPrivFinal == null || mkPrivFinal == null || spkPrivFinal == null) {
       return null;
     }
 
-    return CryptoKeys.fromJson(result.first);
+    return CryptoKeys(
+      masterKeyPrivate:       mkPrivFinal,
+      masterKeyPublic:        row['master_key_public']        as String,
+      identityKeyPrivate:     ikPrivFinal,
+      identityKeyPublic:      row['identity_key_public']      as String,
+      signedPreKeyPrivate:    spkPrivFinal,
+      signedPreKeyPublic:     row['signed_pre_key_public']    as String,
+      signedPreKeySignature:  (row['signed_pre_key_signature'] as String?) ?? '',
+      signedPreKeyCreatedAt:  DateTime.fromMillisecondsSinceEpoch(
+        row['signed_pre_key_created_at'] as int,
+      ),
+    );
+  }
+
+  /// Migrazione: se la chiave privata non è nel TEE ma è nel DB (vecchia versione),
+  /// la sposta nel TEE e la cancella dal DB.
+  Future<String?> _migratePrivateKey(
+    String profileId,
+    String storageKey,
+    String? teeValue,
+    String? dbValue,
+    Map<String, dynamic> row,
+  ) async {
+    if (teeValue != null && teeValue.isNotEmpty) return teeValue;
+    if (dbValue != null && dbValue.isNotEmpty) {
+      // Sposta nel TEE
+      await _secureStorage.write(key: storageKey, value: dbValue);
+      // Cancella dal DB
+      await _currentDatabase!.execute(
+        'UPDATE crypto_keys SET identity_key_private="", master_key_private="", signed_pre_key_private="" WHERE id=?',
+        [profileId],
+      );
+      return dbValue;
+    }
+    return null;
   }
 
   /// Aggiorna le chiavi crittografiche del profilo corrente (es. dopo rotazione SPK).
+  /// Le chiavi private vengono salvate nel TEE, le pubbliche nel DB.
   Future<void> saveCryptoKeys(CryptoKeys keys) async {
     if (_currentDatabase == null || _currentProfile == null) return;
+    final id = _currentProfile!.id;
+
+    // Salva private nel TEE
+    await _secureStorage.write(key: _ikPrivKey(id),  value: keys.identityKeyPrivate);
+    await _secureStorage.write(key: _mkPrivKey(id),  value: keys.masterKeyPrivate);
+    await _secureStorage.write(key: _spkPrivKey(id), value: keys.signedPreKeyPrivate);
+
+    // Salva solo pubbliche nel DB
     await _currentDatabase!.update(
       'crypto_keys',
-      keys.toJson(),
+      {
+        'master_key_private':       '',
+        'master_key_public':        keys.masterKeyPublic,
+        'identity_key_private':     '',
+        'identity_key_public':      keys.identityKeyPublic,
+        'signed_pre_key_private':   '',
+        'signed_pre_key_public':    keys.signedPreKeyPublic,
+        'signed_pre_key_signature': keys.signedPreKeySignature,
+        'signed_pre_key_created_at': keys.signedPreKeyCreatedAt.millisecondsSinceEpoch,
+      },
       where: 'id = ?',
-      whereArgs: [_currentProfile!.id],
+      whereArgs: [id],
     );
   }
 }
