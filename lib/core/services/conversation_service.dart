@@ -98,20 +98,19 @@ class ConversationService {
     required String theirPublicKeyBase64,
     String? theirSignedPreKeyBase64,
   }) async {
-    final keysMaps = await _db.query('crypto_keys');
-    if (keysMaps.isEmpty) throw Exception('No crypto keys found');
-    final keysMap = keysMaps.first;
+    final keys = await _profileService.getCurrentCryptoKeys();
+    if (keys == null) throw Exception('No crypto keys found');
 
     // Master key X25519 come long-term DH identity key
     final myIdentityKeyPair = await _generateKeyPairFromBytes(
-      base64Decode(keysMap['master_key_private'] as String),
-      base64Decode(keysMap['master_key_public'] as String),
+      base64Decode(keys.masterKeyPrivate),
+      base64Decode(keys.masterKeyPublic),
     );
 
     // SPK locale (chiave DH separata)
     final mySpkKeyPair = await _generateKeyPairFromBytes(
-      base64Decode(keysMap['signed_pre_key_private'] as String),
-      base64Decode(keysMap['signed_pre_key_public'] as String),
+      base64Decode(keys.signedPreKeyPrivate),
+      base64Decode(keys.signedPreKeyPublic),
     );
 
     // Identity pubkey del destinatario (X25519 master key)
@@ -153,17 +152,16 @@ class ConversationService {
     required String theirMasterKeyBase64,
     required String theirSpkBase64,
   }) async {
-    final keysMaps = await _db.query('crypto_keys');
-    if (keysMaps.isEmpty) throw Exception('No crypto keys found');
-    final keysMap = keysMaps.first;
+    final keys = await _profileService.getCurrentCryptoKeys();
+    if (keys == null) throw Exception('No crypto keys found');
 
     final myIdentityKeyPair = await _generateKeyPairFromBytes(
-      base64Decode(keysMap['master_key_private'] as String),
-      base64Decode(keysMap['master_key_public'] as String),
+      base64Decode(keys.masterKeyPrivate),
+      base64Decode(keys.masterKeyPublic),
     );
     final mySpkKeyPair = await _generateKeyPairFromBytes(
-      base64Decode(keysMap['signed_pre_key_private'] as String),
-      base64Decode(keysMap['signed_pre_key_public'] as String),
+      base64Decode(keys.signedPreKeyPrivate),
+      base64Decode(keys.signedPreKeyPublic),
     );
 
     final theirIdentityKey = SimplePublicKey(
