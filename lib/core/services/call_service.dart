@@ -295,6 +295,14 @@ class CallService {
     } catch (e) {
       debugPrint('[CALL] enableSpeaker error: $e');
     }
+    // Su iOS imposta la categoria audio corretta per AEC ottimale:
+    // voiceChat = echo cancellation + noise reduction ottimizzati per chiamate
+    // defaultToSpeaker controlla il routing senza perdere l'AEC
+    try {
+      if (enable) {
+        await Helper.setAppleAudioIOMode(AppleAudioIOMode.localAndRemote);
+      }
+    } catch (_) {}
   }
 
   // ─── PeerConnection ───────────────────────────────────────────────────────

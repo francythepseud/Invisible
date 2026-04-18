@@ -42,13 +42,23 @@ class NotificationService {
     await _plugin.initialize(initSettings);
   }
 
-  /// Richiede il permesso su Android 13+. Restituisce true se concesso.
+  /// Richiede il permesso notifiche su Android 13+ e iOS. Restituisce true se concesso.
   Future<bool> requestPermission() async {
+    // iOS
+    final ios = _plugin.resolvePlatformSpecificImplementation<
+        IOSFlutterLocalNotificationsPlugin>();
+    if (ios != null) {
+      final granted = await ios.requestPermissions(alert: true, badge: true, sound: true);
+      return granted ?? false;
+    }
+    // Android 13+
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    if (android == null) return true;
-    final granted = await android.requestNotificationsPermission();
-    return granted ?? false;
+    if (android != null) {
+      final granted = await android.requestNotificationsPermission();
+      return granted ?? false;
+    }
+    return true;
   }
 
   // ─── Impostazioni utente ───────────────────────────────────────────────────
@@ -101,7 +111,14 @@ class NotificationService {
     final text = await getMessage();
     final sound = await getSound();
 
-    final details = NotificationDetails(android: _buildAndroidDetails(sound));
+    final details = NotificationDetails(
+      android: _buildAndroidDetails(sound),
+      iOS: DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: false,
+        presentSound: sound != NotifSound.silenzioso,
+      ),
+    );
 
     await _plugin.show(
       _notifId++ % 1000,

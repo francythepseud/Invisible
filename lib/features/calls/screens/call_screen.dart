@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:invisible/core/services/call_log_service.dart';
 import 'package:invisible/core/services/call_service.dart';
 import 'package:invisible/models/call_log_entry.dart';
@@ -54,6 +55,9 @@ class _CallScreenState extends State<CallScreen> {
   }
 
   Future<void> _init() async {
+    // Mantieni lo schermo acceso durante la chiamata
+    try { await WakelockPlus.enable(); } catch (_) {}
+
     await _localRenderer.initialize();
     await _remoteRenderer.initialize();
 
@@ -103,6 +107,8 @@ class _CallScreenState extends State<CallScreen> {
     _callStateSub?.cancel();
     _localRenderer.dispose();
     _remoteRenderer.dispose();
+    // Rilascia il wakelock quando si esce dalla chiamata
+    try { WakelockPlus.disable(); } catch (_) {}
     super.dispose();
   }
 

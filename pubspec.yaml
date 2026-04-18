@@ -81,6 +81,9 @@ dependencies:
   geolocator: ^13.0.2
   url_launcher: ^6.3.1
 
+  # Wakelock — mantiene lo schermo acceso durante le chiamate
+  wakelock_plus: ^1.1.4
+
 dependency_overrides:
   record_linux: ^1.3.0
 
