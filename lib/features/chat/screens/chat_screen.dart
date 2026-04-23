@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:invisible/core/services/audio_recorder_service.dart';
 import 'package:invisible/core/services/call_service.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/core/services/message_service.dart';
 import 'package:invisible/core/services/media_library_service.dart';
@@ -208,7 +209,8 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         _scrollToBottom();
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'SendVoiceError');
       if (mounted) {
         setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -244,7 +246,8 @@ class _ChatScreenState extends State<ChatScreen> {
           _messageService.sendReadReceipt(widget.conversation.id);
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'LoadMessagesError');
       if (mounted) setState(() => _isLoading = false);
     }
   }
@@ -324,7 +327,8 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (photo == null) return;
       await _saveAttachmentToSandbox(photo.path, MessageType.image);
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'CameraError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -390,7 +394,8 @@ class _ChatScreenState extends State<ChatScreen> {
           });
           _scrollToBottom();
         }
-      } catch (e) {
+      } catch (e, st) {
+        ErrorReportingService.log(e, st, 'SendLocationError');
         if (mounted) {
           setState(() => _isSending = false);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -401,7 +406,8 @@ class _ChatScreenState extends State<ChatScreen> {
           );
         }
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'LocationError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -432,7 +438,8 @@ class _ChatScreenState extends State<ChatScreen> {
           _pendingType = type;
         });
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'AttachmentError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -563,7 +570,8 @@ class _ChatScreenState extends State<ChatScreen> {
         });
         _scrollToBottom();
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'SendMessageError');
       if (mounted) {
         setState(() => _isSending = false);
         ScaffoldMessenger.of(context).showSnackBar(

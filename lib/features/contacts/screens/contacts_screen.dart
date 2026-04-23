@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:invisible/core/services/contact_service.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/core/services/presence_service.dart';
 import 'package:invisible/models/contact.dart';
 import 'package:invisible/utils/constants.dart';
@@ -151,7 +152,8 @@ class _ContactsScreenState extends State<ContactsScreen> {
         signedPreKeySig: data.signedPreKeySig,
       );
       if (mounted) await _loadContacts();
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'AddContactError');
       if (mounted) {
         final msg = '$e'.replaceAll('Exception: ', '');
         ScaffoldMessenger.of(context).showSnackBar(

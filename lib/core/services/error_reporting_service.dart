@@ -114,6 +114,12 @@ class ErrorReportingService {
     );
   }
 
+  /// Shortcut statico — usabile ovunque con una sola riga:
+  ///   ErrorReportingService.log(e, st, 'CallError');
+  static void log(dynamic error, [StackTrace? stackTrace, String errorType = 'AppError']) {
+    ErrorReportingService().reportError(error, stackTrace: stackTrace, errorType: errorType);
+  }
+
   // ─── Internals ────────────────────────────────────────────────────────────
 
   Future<void> _loadDeviceInfo() async {

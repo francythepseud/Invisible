@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:invisible/core/network/signaling_client.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/contact.dart';
 
@@ -296,8 +297,9 @@ class CallService {
     try {
       await Helper.setSpeakerphoneOn(enable);
       debugPrint('[CALL] Speaker ${enable ? "ON" : "OFF"}');
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[CALL] enableSpeaker error: $e');
+      ErrorReportingService.log(e, st, 'CallAudioError');
     }
     // Su iOS imposta la categoria audio corretta per AEC ottimale:
     // voiceChat = echo cancellation + noise reduction ottimizzati per chiamate
@@ -440,8 +442,9 @@ class CallService {
       testStream.dispose();
       debugPrint('[CALL] _requestPermissions OK — withVideo=$withVideo');
       return true;
-    } catch (e) {
+    } catch (e, st) {
       debugPrint('[CALL] Permessi negati via getUserMedia: $e');
+      ErrorReportingService.log(e, st, 'CallPermissionError');
       try {
         final micStatus = await Permission.microphone.status;
         if (micStatus.isPermanentlyDenied) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:invisible/core/network/invisible_client.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/user_credentials.dart';
 import 'package:invisible/utils/constants.dart';
@@ -86,7 +87,8 @@ class _LoginScreenState extends State<LoginScreen> {
           (route) => false,
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'LoginError');
       if (mounted) {
         final msg = e is Exception
             ? e.toString().replaceFirst('Exception: ', '')

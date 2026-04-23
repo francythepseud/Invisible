@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter;
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/user_credentials.dart';
 import 'package:invisible/utils/constants.dart';
@@ -82,7 +83,8 @@ class _CreateProfileScreenState extends State<CreateProfileScreen> {
           (route) => false,
         );
       }
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'CreateProfileError');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

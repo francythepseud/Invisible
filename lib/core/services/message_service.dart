@@ -16,6 +16,7 @@ import 'package:invisible/core/crypto/sealed_sender.dart';
 import 'package:invisible/core/network/invisible_client.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/core/services/conversation_service.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/models/message.dart';
 
 /// Servizio per la gestione dei messaggi criptati con Double Ratchet.
@@ -111,10 +112,13 @@ class MessageService {
       Uint8List.fromList(utf8.encode(drPlaintext)),
     );
 
-    final encryptedMessage = await _doubleRatchet.encrypt(
-      ratchetState,
-      plaintextBytes,
-    );
+    late EncryptedMessage encryptedMessage;
+    try {
+      encryptedMessage = await _doubleRatchet.encrypt(ratchetState, plaintextBytes);
+    } catch (e, st) {
+      ErrorReportingService().reportError(e, stackTrace: st, errorType: 'EncryptError');
+      rethrow;
+    }
 
     final headerJson = await _serializeMessageHeader(encryptedMessage.header);
     final messageId = _cryptoService.generateId();
@@ -300,10 +304,10 @@ class MessageService {
         ratchetState,
         encryptedMessage,
       );
-    } catch (e) {
-      // Ratchet state corrotto (es. sessione inizializzata prima del fix).
-      // Reset e riprova come ricevente fresh.
-      debugPrint('[MSG] MAC error, reset ratchet state e riprovo: $e');
+    } catch (e, st) {
+      // Ratchet state corrotto — logga e riprova come ricevente fresh.
+      debugPrint('[MSG] decrypt error, reset ratchet state e riprovo: $e');
+      ErrorReportingService().reportError(e, stackTrace: st, errorType: 'DecryptError');
       final conv = await _conversationService.getConversation(conversationId);
       if (conv == null) rethrow;
       final contactRows = await _db.query(
@@ -319,7 +323,12 @@ class MessageService {
         x3dhEphemeralPubBase64: x3dhEphemeralPub,
         x3dhOpkId: x3dhOpkId,
       );
-      decryptedMessage = await _doubleRatchet.decrypt(ratchetState, encryptedMessage);
+      try {
+        decryptedMessage = await _doubleRatchet.decrypt(ratchetState, encryptedMessage);
+      } catch (e2, st2) {
+        ErrorReportingService().reportError(e2, stackTrace: st2, errorType: 'DecryptErrorFatal');
+        rethrow;
+      }
     }
 
     await _conversationService.updateRatchetState(

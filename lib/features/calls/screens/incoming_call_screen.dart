@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:invisible/core/services/call_service.dart';
 import 'package:invisible/core/services/call_log_service.dart';
+import 'package:invisible/core/services/error_reporting_service.dart';
 import 'package:invisible/models/call_log_entry.dart';
 import 'package:invisible/utils/constants.dart';
 import 'package:uuid/uuid.dart';
@@ -96,7 +97,8 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       await _player!.setVolume(1.0);
       await _player!.setFilePath(_ringtonePath!);
       await _player!.play();
-    } catch (e) {
+    } catch (e, st) {
+      ErrorReportingService.log(e, st, 'RingtoneError');
       debugPrint('[CALL] Ringtone error: $e');
     }
 
