@@ -115,6 +115,9 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     try { _player?.stop(); } catch (_) {}
     try { _player?.dispose(); } catch (_) {}
     _player = null;
+    // Deattiva la sessione audio di just_audio così WebRTC può
+    // configurare la propria (voiceChat) senza conflitti.
+    AudioSession.instance.then((s) => s.setActive(false)).catchError((_) {});
   }
 
   void _onAccept() {

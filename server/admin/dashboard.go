@@ -630,7 +630,7 @@ function addUser() {
 }
 
 function toggleUser(hash) {
-  fetch('/admin/api/users/'+hash+'/toggle', {method:'POST',headers:{'X-Admin-Token':TOKEN}})
+  fetch('/admin/api/users/toggle?hash='+encodeURIComponent(hash), {method:'POST',headers:{'X-Admin-Token':TOKEN}})
     .then(r => r.json())
     .then(d => {
       showToast(d.enabled ? 'Utente attivato' : 'Utente disattivato', d.enabled ? 'success' : 'error');
@@ -640,7 +640,7 @@ function toggleUser(hash) {
 
 function deleteUser(hash, name) {
   if (!confirm('Eliminare "'+name+'"?\nL\'utente non potrà più accedere all\'app.')) return;
-  fetch('/admin/api/users/'+hash, {method:'DELETE',headers:{'X-Admin-Token':TOKEN}})
+  fetch('/admin/api/users/delete?hash='+encodeURIComponent(hash), {method:'DELETE',headers:{'X-Admin-Token':TOKEN}})
     .then(() => { showToast('Utente eliminato', 'error'); loadUsers(); loadDashboard(); });
 }
 

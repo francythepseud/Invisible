@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -71,6 +72,7 @@ class CallService {
   String? get remoteIdentityHash => _remoteIdentityHash;
 
   StreamSubscription<SignalingMessage>? _signalingSubscription;
+  StreamSubscription<AudioInterruptionEvent>? _audioInterruptionSub;
 
   // ─── Inizializzazione ─────────────────────────────────────────────────────
 
@@ -125,6 +127,7 @@ class CallService {
     debugPrint('[CALL] initiateCall → remoteHash=$_remoteIdentityHash isVideo=$isVideo signalingConnected=${_signaling.isConnected}');
     _updateCallState(CallState.calling);
 
+    await _setupAudioSessionForCall();
     await _createPeerConnection();
     _localStream = await _getUserMedia(isVideo);
     _localStream!.getTracks().forEach((t) => _peerConnection!.addTrack(t, _localStream!));
@@ -186,6 +189,7 @@ class CallService {
 
     _updateCallState(CallState.active);
 
+    await _setupAudioSessionForCall();
     await _createPeerConnection();
     _localStream = await _getUserMedia(info.isVideo);
     _localStream!.getTracks().forEach((t) => _peerConnection!.addTrack(t, _localStream!));
@@ -305,6 +309,44 @@ class CallService {
     } catch (_) {}
   }
 
+  // ─── Audio Session ────────────────────────────────────────────────────────
+
+  /// Configura AVAudioSession/Android audio focus per chiamata vocale.
+  /// Va chiamato PRIMA di getUserMedia, altrimenti su iOS WebRTC non sente nulla
+  /// perché just_audio potrebbe aver lasciato la session in modalità errata.
+  Future<void> _setupAudioSessionForCall() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+        avAudioSessionCategoryOptions: AVAudioSessionCategoryOptions.allowBluetooth,
+        avAudioSessionMode: AVAudioSessionMode.voiceChat,
+        androidAudioAttributes: const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.speech,
+          usage: AndroidAudioUsage.voiceCommunication,
+          flags: AndroidAudioFlags.none,
+        ),
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
+        androidWillPauseWhenDucked: false,
+      ));
+      await session.setActive(true);
+
+      // Ascolta interruzioni (standby, telefonate GSM, ecc.) e riattiva
+      _audioInterruptionSub?.cancel();
+      _audioInterruptionSub = session.interruptionEventStream.listen((event) {
+        if (!event.begin) {
+          // Interruzione terminata — riattiva la sessione per riprendere l'audio
+          debugPrint('[CALL] audio interruption ended, riattivo session');
+          session.setActive(true).catchError((_) {});
+        }
+      });
+
+      debugPrint('[CALL] AudioSession configurata per voice call');
+    } catch (e) {
+      debugPrint('[CALL] setupAudioSession error (ignorato): $e');
+    }
+  }
+
   // ─── PeerConnection ───────────────────────────────────────────────────────
 
   static const _iceConfig = {
@@ -346,8 +388,9 @@ class CallService {
 
     _peerConnection!.onConnectionState = (state) {
       debugPrint('[CALL] onConnectionState: $state');
-      if (state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
+      // "disconnected" è transitorio (rete che fluttua, standby) — non chiudere.
+      // Solo "failed" è terminale (ICE definitivamente morto).
+      if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed) {
         _handleRemoteHangup();
       }
     };
@@ -444,6 +487,8 @@ class CallService {
   }
 
   void _reset() {
+    _audioInterruptionSub?.cancel();
+    _audioInterruptionSub = null;
     _peerConnection?.close();
     _peerConnection = null;
     _localStream?.dispose();
@@ -453,6 +498,8 @@ class CallService {
     _remoteIdentityHash = null;
     _bufferedCandidates.clear();
     _callState = CallState.idle;
+    // Deattiva la sessione audio quando la chiamata finisce
+    AudioSession.instance.then((s) => s.setActive(false)).catchError((_) {});
   }
 
   void stopListening() {

@@ -221,10 +221,9 @@ func (s *Server) handleAddUser(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, map[string]bool{"ok": true})
 }
 
-// PATCH /admin/api/users/{hash}/toggle
+// POST /admin/api/users/toggle?hash=...
 func (s *Server) handleToggleUser(w http.ResponseWriter, r *http.Request) {
-	hash := strings.TrimPrefix(r.URL.Path, "/admin/api/users/")
-	hash = strings.TrimSuffix(hash, "/toggle")
+	hash := r.URL.Query().Get("hash")
 	if hash == "" {
 		http.Error(w, "hash mancante", http.StatusBadRequest)
 		return
@@ -246,9 +245,9 @@ func (s *Server) handleToggleUser(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, map[string]bool{"enabled": enabled})
 }
 
-// DELETE /admin/api/users/{hash}
+// DELETE /admin/api/users/delete?hash=...
 func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) {
-	hash := strings.TrimPrefix(r.URL.Path, "/admin/api/users/")
+	hash := r.URL.Query().Get("hash")
 	if hash == "" {
 		http.Error(w, "hash mancante", http.StatusBadRequest)
 		return
@@ -533,10 +532,15 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	mux.HandleFunc("/admin/api/users/", srv.requireToken(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/toggle") && r.Method == http.MethodPost {
+	mux.HandleFunc("/admin/api/users/toggle", srv.requireToken(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
 			srv.handleToggleUser(w, r)
-		} else if r.Method == http.MethodDelete {
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
+	mux.HandleFunc("/admin/api/users/delete", srv.requireToken(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
 			srv.handleDeleteUser(w, r)
 		} else {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
