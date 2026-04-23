@@ -39,34 +39,17 @@ class PinnedHttpClient {
     final pins = AppConstants.certPins;
 
     if (pins.isNotEmpty) {
-      if (Platform.isAndroid) {
-        // Android: disabilita tutti i root CA, accetta solo il pin
-        final context = SecurityContext(withTrustedRoots: false);
-        final client = HttpClient(context: context);
-        client.badCertificateCallback =
-            (cert, host, port) => _checkPin(cert, host, port, pins);
-        client.connectionTimeout = const Duration(seconds: 10);
-        client.idleTimeout = const Duration(seconds: 30);
-        return client;
-      } else {
-        // iOS/altri: usa root CA di sistema ma verifica il pin nel callback.
-        // badCertificateCallback è chiamato per cert non validi, ma su iOS
-        // i cert Let's Encrypt sono validi → passiamo la connessione a
-        // un HttpOverride che verifica il fingerprint dopo ogni handshake.
-        //
-        // Approccio: usiamo i root CA di sistema, ma con connectionFactory
-        // personalizzato che verifica il pin dopo ogni TLS handshake.
-        // Se il pin non corrisponde, chiude la connessione.
-        final client = HttpClient();
-        client.connectionTimeout = const Duration(seconds: 10);
-        client.idleTimeout = const Duration(seconds: 30);
-        // badCertificateCallback: intercetta cert non validi (non dovrebbe
-        // accadere con cert validi, ma per sicurezza rifiutiamo tutto
-        // tranne il pin configurato)
-        client.badCertificateCallback =
-            (cert, host, port) => _checkPin(cert, host, port, pins);
-        return client;
-      }
+      // Sia Android che iOS: usa i root CA di sistema per validare Let's Encrypt,
+      // poi verifica il pin via badCertificateCallback.
+      // Su Android il pinning OS-level è già garantito da network_security_config.xml.
+      // SecurityContext(withTrustedRoots: false) impedisce la connessione TLS
+      // con cert Let's Encrypt su entrambe le piattaforme — non usare.
+      final client = HttpClient();
+      client.badCertificateCallback =
+          (cert, host, port) => _checkPin(cert, host, port, pins);
+      client.connectionTimeout = const Duration(seconds: 10);
+      client.idleTimeout = const Duration(seconds: 30);
+      return client;
     }
 
     // Nessun pin configurato: TLS strict con CA di sistema
