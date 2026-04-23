@@ -26,7 +26,7 @@ class DatabaseService {
       _database = await openDatabase(
         dbPath,
         password: dbKey,
-        version: 3,
+        version: 5,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       );
@@ -42,7 +42,7 @@ class DatabaseService {
           _database = await openDatabase(
             dbPath,
             password: dbKey,
-            version: 3,
+            version: 5,
             onCreate: _onCreate,
             onUpgrade: _onUpgrade,
           );
@@ -95,6 +95,8 @@ class DatabaseService {
         identity_key TEXT,
         signed_pre_key TEXT,
         signed_pre_key_sig TEXT,
+        opk_pub TEXT,
+        opk_id INTEGER,
         avatar_path TEXT,
         blocked INTEGER DEFAULT 0,
         created_at INTEGER NOT NULL,
@@ -137,7 +139,7 @@ class DatabaseService {
       )
     ''');
 
-    // Tabella stato Double Ratchet
+    // Tabella stato Double Ratchet + metadati X3DH
     await db.execute('''
       CREATE TABLE ratchet_states (
         id TEXT PRIMARY KEY,
@@ -152,14 +154,16 @@ class DatabaseService {
         receive_count INTEGER DEFAULT 0,
         previous_send_count INTEGER DEFAULT 0,
         updated_at TEXT NOT NULL,
+        x3dh_ephemeral_pub TEXT,
+        x3dh_opk_id INTEGER,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
       )
     ''');
 
-    // Tabella pre-keys locali
+    // Tabella One-Time PreKeys (OPK) per X3DH
     await db.execute('''
       CREATE TABLE prekeys (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         public_key TEXT NOT NULL,
         private_key TEXT NOT NULL,
         used INTEGER DEFAULT 0,
@@ -213,6 +217,27 @@ class DatabaseService {
     }
     if (oldVersion < 3) {
       await db.execute('ALTER TABLE messages ADD COLUMN decrypted_text TEXT');
+    }
+    if (oldVersion < 4) {
+      // Aggiunge colonne X3DH a ratchet_states
+      await db.execute('ALTER TABLE ratchet_states ADD COLUMN x3dh_ephemeral_pub TEXT');
+      await db.execute('ALTER TABLE ratchet_states ADD COLUMN x3dh_opk_id INTEGER');
+      // Aggiunge AUTOINCREMENT a prekeys (ricrea la tabella)
+      await db.execute('DROP TABLE IF EXISTS prekeys');
+      await db.execute('''
+        CREATE TABLE prekeys (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          public_key TEXT NOT NULL,
+          private_key TEXT NOT NULL,
+          used INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL
+        )
+      ''');
+    }
+    if (oldVersion < 5) {
+      // Aggiunge campi OPK al contatto (chiave usa-e-getta del destinatario)
+      await db.execute('ALTER TABLE contacts ADD COLUMN opk_pub TEXT');
+      await db.execute('ALTER TABLE contacts ADD COLUMN opk_id INTEGER');
     }
   }
 

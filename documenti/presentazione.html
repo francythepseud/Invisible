@@ -726,9 +726,10 @@ body {
         dove sei, né con chi parli.
       </div>
       <div style="display:flex; flex-direction:column; gap:1.5mm; margin-bottom:10mm;">
-        <div class="cover-pill">● Cifratura end-to-end</div>
-        <div class="cover-pill">● Zero dati personali</div>
-        <div class="cover-pill">● Multiprofilo isolato</div>
+        <div class="cover-pill">● Cifratura end-to-end Signal Protocol</div>
+        <div class="cover-pill">● Zero dati personali · Zero FCM · Zero Google</div>
+        <div class="cover-pill">● Multiprofilo isolato crittograficamente</div>
+        <div class="cover-pill">● Safety Numbers · Traffic Analysis Mitigation · Messaggi a scomparsa</div>
       </div>
       <div class="cover-bottom">
         <div class="cover-bottom-text">Confidenziale — 2026</div>
@@ -1028,6 +1029,41 @@ body {
           <td><span class="y">✓</span></td>
           <td><span class="p">parz.</span></td>
         </tr>
+        <tr>
+          <td class="feat">Safety Numbers (verifica MITM)</td>
+          <td class="hl"><span class="y">✓</span></td>
+          <td><span class="y">✓</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Traffic analysis mitigation</td>
+          <td class="hl"><span class="y">✓</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Nessun FCM / Google Play Services</td>
+          <td class="hl"><span class="y">✓</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Identity Key Rotation peer-to-peer</td>
+          <td class="hl"><span class="y">✓</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+        </tr>
+        <tr>
+          <td class="feat">Messaggi a scomparsa (TTL cifrato nel DR)</td>
+          <td class="hl"><span class="y">✓</span></td>
+          <td><span class="p">Parz.</span></td>
+          <td><span class="n">✗</span></td>
+          <td><span class="n">✗</span></td>
+        </tr>
       </tbody>
     </table>
 
@@ -1134,10 +1170,35 @@ body {
         <div class="card-h">Wipe d'emergenza</div>
         <div class="card-p">Il tasto panico elimina in modo irrecuperabile tutti i profili, messaggi, contatti e chiavi in pochi secondi. Nessuna traccia residua.</div>
       </div>
+      <div class="card accent">
+        <span class="card-ico">👤</span>
+        <div class="card-h">Sealed Sender</div>
+        <div class="card-p">Il server non conosce il mittente di nessun messaggio. L'identità del mittente è cifrata dentro la busta stessa — visibile solo al destinatario, mai al relay.</div>
+      </div>
+      <div class="card">
+        <span class="card-ico">🔢</span>
+        <div class="card-h">Safety Numbers</div>
+        <div class="card-p">60 cifre derivate da 5120 iterazioni SHA-256 delle chiavi identità. Verifica fuori banda se un MITM è presente nella comunicazione — stesso algoritmo di Signal.</div>
+      </div>
+      <div class="card">
+        <span class="card-ico">📦</span>
+        <div class="card-h">Traffic Analysis Mitigation</div>
+        <div class="card-p">Padding a blocchi fissi + jitter server 0–255ms + dummy keepalive casuale. Un osservatore di rete non può dedurre tipo, lunghezza o pattern dei messaggi.</div>
+      </div>
+      <div class="card">
+        <span class="card-ico">🔄</span>
+        <div class="card-h">Identity Key Rotation</div>
+        <div class="card-p">In caso di compromissione, l'utente ruota la propria chiave identità. La firma di transizione è verificata dai contatti peer-to-peer — nessun server coinvolto.</div>
+      </div>
+      <div class="card">
+        <span class="card-ico">⏱️</span>
+        <div class="card-h">Messaggi a scomparsa</div>
+        <div class="card-p">Timer per-conversazione da 30 secondi a 7 giorni. Il TTL è cifrato nel payload Double Ratchet — il relay non sa mai per quanto tempo esiste un messaggio. Secure delete automatico.</div>
+      </div>
     </div>
 
     <div class="hero-box" style="margin-top: auto;">
-      <div class="hero-quote">L'infrastruttura server è di proprietà esclusiva. Nessun dato transita su cloud di terze parti. Controllo totale sulla catena di custodia — dall'app al server.</div>
+      <div class="hero-quote">Nessuna dipendenza da Google, Meta o Apple. Il sistema funziona senza FCM, senza push notification di terze parti, senza cloud esterno. Sovranità totale dalla app al server.</div>
     </div>
 
     <div class="footer">

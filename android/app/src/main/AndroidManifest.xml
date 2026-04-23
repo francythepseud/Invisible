@@ -27,6 +27,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Foreground Service per mantenere il WebSocket relay attivo in background (no FCM) -->
+        <service
+            android:name=".RelayForegroundService"
+            android:foregroundServiceType="connectedDevice"
+            android:exported="false"/>
+
         <!-- VPN Service richiesto da wireguard_flutter -->
         <service
             android:name="com.wireguard.android.backend.GoBackend"
@@ -57,6 +63,8 @@
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <!-- Android 14+: tipo specifico per connessioni di rete in foreground -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
     <!-- Richiesto su Android 13+ per mostrare notifiche -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 

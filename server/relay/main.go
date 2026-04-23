@@ -1,11 +1,13 @@
 // relay — server WebSocket per consegna messaggi E2E cifrati
-// Il server non può mai leggere il contenuto: vede solo from_id, to_id, payload opaco.
-// I messaggi sono messi in coda se il destinatario è offline (TTL 7 giorni).
-// Consegna garantita: il mittente riceve ACK solo dopo la conferma del destinatario.
+// Sealed Sender: il server non vede mai chi ha scritto.
+// Riceve solo il destinatario (per instradare) + blob opaco cifrato.
+// Il mittente è nascosto dentro la busta, leggibile solo dal destinatario.
+// I messaggi sono messi in coda su Redis con TTL automatico (7 giorni).
+// Scala orizzontalmente: più pod possono servire utenti diversi contemporaneamente.
 package main
 
 import (
-	"bytes"
+	"context"
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
@@ -18,131 +20,143 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	bolt "go.etcd.io/bbolt"
+	"github.com/redis/go-redis/v9"
 )
 
 // ── Configurazione ────────────────────────────────────────────────────────────
 
-var msgTTL = 7 * 24 * time.Hour
+var (
+	msgTTL = 7 * 24 * time.Hour
+	ctx    = context.Background()
+)
 
 // ── Tipi messaggi ─────────────────────────────────────────────────────────────
 
 type RelayMsg struct {
-	Type      string `json:"type"`
-	To        string `json:"to,omitempty"`
-	From      string `json:"from,omitempty"`
-	Payload   string `json:"payload,omitempty"` // base64 ciphertext opaco
-	MsgID     string `json:"msg_id,omitempty"`
-	Timestamp string `json:"timestamp,omitempty"`
-	Challenge string `json:"challenge,omitempty"`
-	Signature string `json:"signature,omitempty"`
-	IdentityKey string `json:"identity_key,omitempty"`
+	Type          string `json:"type"`
+	To            string `json:"to,omitempty"`
+	From          string `json:"from,omitempty"`
+	Payload       string `json:"payload,omitempty"`        // legacy (non sealed)
+	SealedPayload string `json:"sealed_payload,omitempty"` // sealed sender — nessun from
+	MsgID         string `json:"msg_id,omitempty"`
+	Timestamp     string `json:"timestamp,omitempty"`
+	Challenge     string `json:"challenge,omitempty"`
+	Signature     string `json:"signature,omitempty"`
+	IdentityKey   string `json:"identity_key,omitempty"`
 }
 
-// ── Message Store (bbolt — persistente su disco) ───────────────────────────────
-
-var bktMessages = []byte("messages")
+// ── Message Store (Redis — persistente, TTL automatico, scala orizzontalmente) ─
 
 type QueuedMsg struct {
-	From      string
-	To        string
-	Payload   string
-	MsgID     string
-	Timestamp time.Time
+	From          string
+	To            string
+	Payload       string // legacy
+	SealedPayload string // sealed sender
+	MsgID         string
+	Timestamp     time.Time
 }
 
-// msgKey costruisce la chiave bbolt: "<recipientID>:<msgID>"
-// Il prefisso recipientID permette Seek efficiente per Drain.
-func msgKey(to, msgID string) []byte {
-	return []byte(to + ":" + msgID)
+// redisKey costruisce la chiave Redis per un singolo messaggio: "msg:<to>:<msgID>"
+func redisKey(to, msgID string) string {
+	return fmt.Sprintf("msg:%s:%s", to, msgID)
+}
+
+// redisIndexKey costruisce la chiave del set di indice per un destinatario: "idx:<to>"
+// Il set contiene tutti i msgID in coda per quell'utente.
+func redisIndexKey(to string) string {
+	return fmt.Sprintf("idx:%s", to)
 }
 
 type MessageStore struct {
-	db *bolt.DB
+	rdb *redis.Client
 }
 
-// NewMessageStore apre (o crea) il database bbolt al path indicato.
-func NewMessageStore(path string) (*MessageStore, error) {
-	db, err := bolt.Open(path, 0600, &bolt.Options{Timeout: 5 * time.Second})
-	if err != nil {
-		return nil, fmt.Errorf("bbolt open: %w", err)
+// NewMessageStore crea un client Redis con connessione verificata.
+func NewMessageStore(redisAddr string) (*MessageStore, error) {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:         redisAddr,
+		Password:     os.Getenv("REDIS_PASSWORD"), // vuoto se non configurato
+		DB:           0,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  3 * time.Second,
+		WriteTimeout: 3 * time.Second,
+	})
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("redis ping: %w", err)
 	}
-	if err := db.Update(func(tx *bolt.Tx) error {
-		_, err := tx.CreateBucketIfNotExists(bktMessages)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	ms := &MessageStore{db: db}
-	go ms.cleanup()
-	return ms, nil
+	log.Printf("[RELAY] Redis connesso a %s", redisAddr)
+	return &MessageStore{rdb: rdb}, nil
 }
 
+// Enqueue salva il messaggio su Redis con TTL automatico.
+// Usa una struttura a doppia chiave:
+//   - "msg:<to>:<msgID>" → JSON del messaggio (con TTL)
+//   - "idx:<to>"         → Set con i msgID in coda (per Drain efficiente)
 func (ms *MessageStore) Enqueue(msg QueuedMsg) {
 	data, err := json.Marshal(msg)
 	if err != nil {
 		return
 	}
-	_ = ms.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bktMessages).Put(msgKey(msg.To, msg.MsgID), data)
-	})
+	pipe := ms.rdb.Pipeline()
+	msgK := redisKey(msg.To, msg.MsgID)
+	idxK := redisIndexKey(msg.To)
+
+	pipe.Set(ctx, msgK, data, msgTTL)
+	pipe.SAdd(ctx, idxK, msg.MsgID)
+	pipe.Expire(ctx, idxK, msgTTL)
+	if _, err := pipe.Exec(ctx); err != nil {
+		log.Printf("[RELAY] Enqueue errore: %v", err)
+	}
 }
 
 // Drain legge e rimuove tutti i messaggi in coda per il recipient.
+// Operazione atomica: usa pipeline Redis per minimizzare round-trip.
 func (ms *MessageStore) Drain(recipientID string) []QueuedMsg {
-	prefix := []byte(recipientID + ":")
-	var msgs []QueuedMsg
-	var keys [][]byte
+	idxK := redisIndexKey(recipientID)
 
-	_ = ms.db.View(func(tx *bolt.Tx) error {
-		c := tx.Bucket(bktMessages).Cursor()
-		for k, v := c.Seek(prefix); k != nil && bytes.HasPrefix(k, prefix); k, v = c.Next() {
-			var m QueuedMsg
-			if json.Unmarshal(v, &m) == nil {
-				msgs = append(msgs, m)
-				keys = append(keys, append([]byte{}, k...))
-			}
-		}
+	// Leggi tutti i msgID dell'indice
+	msgIDs, err := ms.rdb.SMembers(ctx, idxK).Result()
+	if err != nil || len(msgIDs) == 0 {
 		return nil
-	})
-
-	if len(keys) > 0 {
-		_ = ms.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket(bktMessages)
-			for _, k := range keys {
-				_ = b.Delete(k)
-			}
-			return nil
-		})
 	}
+
+	// Leggi tutti i messaggi in un'unica pipeline
+	pipe := ms.rdb.Pipeline()
+	cmds := make([]*redis.StringCmd, len(msgIDs))
+	for i, id := range msgIDs {
+		cmds[i] = pipe.Get(ctx, redisKey(recipientID, id))
+	}
+	pipe.Del(ctx, idxK)
+	pipe.Exec(ctx) //nolint
+
+	var msgs []QueuedMsg
+	var toDelete []string
+	for i, cmd := range cmds {
+		data, err := cmd.Result()
+		if err != nil {
+			continue
+		}
+		var m QueuedMsg
+		if json.Unmarshal([]byte(data), &m) == nil {
+			msgs = append(msgs, m)
+			toDelete = append(toDelete, redisKey(recipientID, msgIDs[i]))
+		}
+	}
+
+	// Rimuovi le chiavi dei messaggi consegnati
+	if len(toDelete) > 0 {
+		ms.rdb.Del(ctx, toDelete...)
+	}
+
 	return msgs
 }
 
+// DeleteOne rimuove un singolo messaggio dopo la ricezione dell'ACK.
 func (ms *MessageStore) DeleteOne(recipientID, msgID string) {
-	_ = ms.db.Update(func(tx *bolt.Tx) error {
-		return tx.Bucket(bktMessages).Delete(msgKey(recipientID, msgID))
-	})
-}
-
-// cleanup rimuove ogni ora i messaggi scaduti (TTL superato).
-func (ms *MessageStore) cleanup() {
-	for range time.Tick(time.Hour) {
-		_ = ms.db.Update(func(tx *bolt.Tx) error {
-			b := tx.Bucket(bktMessages)
-			c := b.Cursor()
-			var expired [][]byte
-			for k, v := c.First(); k != nil; k, v = c.Next() {
-				var m QueuedMsg
-				if json.Unmarshal(v, &m) != nil || time.Since(m.Timestamp) > msgTTL {
-					expired = append(expired, append([]byte{}, k...))
-				}
-			}
-			for _, k := range expired {
-				_ = b.Delete(k)
-			}
-			return nil
-		})
-	}
+	pipe := ms.rdb.Pipeline()
+	pipe.Del(ctx, redisKey(recipientID, msgID))
+	pipe.SRem(ctx, redisIndexKey(recipientID), msgID)
+	pipe.Exec(ctx) //nolint
 }
 
 // ── Connection ────────────────────────────────────────────────────────────────
@@ -236,7 +250,6 @@ func (s *Server) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	go conn.writePump()
 
-	// Manda challenge al client
 	conn.write(RelayMsg{
 		Type:      "challenge",
 		Challenge: base64.StdEncoding.EncodeToString(ch),
@@ -253,7 +266,7 @@ func (s *Server) ServeWS(w http.ResponseWriter, r *http.Request) {
 		wsConn.Close()
 	}()
 
-	wsConn.SetReadLimit(10 * 1024 * 1024) // max 10 MB per messaggio (supporta immagini/file cifrati)
+	wsConn.SetReadLimit(10 * 1024 * 1024)
 	wsConn.SetReadDeadline(time.Now().Add(90 * time.Second))
 	wsConn.SetPongHandler(func(string) error {
 		wsConn.SetReadDeadline(time.Now().Add(90 * time.Second))
@@ -302,7 +315,6 @@ func (s *Server) handleAuth(conn *Connection, msg RelayMsg) {
 		return
 	}
 
-	// Verifica whitelist admin
 	idHash := shortHash(msg.IdentityKey)
 	log.Printf("[RELAY] Auth attempt hash=%s", idHash[:8])
 	if !checkWhitelist(idHash) {
@@ -319,74 +331,103 @@ func (s *Server) handleAuth(conn *Connection, msg RelayMsg) {
 	conn.write(RelayMsg{Type: "auth_ok", From: conn.id})
 	log.Printf("[RELAY] Autenticato: %s", conn.id[:8])
 	go notifyPresence(idHash)
-
-	// Notifica gli altri utenti connessi che questo è ora online
 	s.broadcastPresence(conn, "online")
 
-	// Consegna messaggi in coda
+	// Consegna messaggi in coda da Redis
 	queued := s.store.Drain(conn.id)
 	for _, qm := range queued {
-		conn.write(RelayMsg{
-			Type:      "deliver",
-			From:      qm.From,
-			Payload:   qm.Payload,
-			MsgID:     qm.MsgID,
-			Timestamp: qm.Timestamp.UTC().Format(time.RFC3339),
-		})
+		if qm.SealedPayload != "" {
+			conn.write(RelayMsg{
+				Type:          "deliver",
+				SealedPayload: qm.SealedPayload,
+				MsgID:         qm.MsgID,
+				Timestamp:     qm.Timestamp.UTC().Format(time.RFC3339),
+			})
+		} else {
+			conn.write(RelayMsg{
+				Type:      "deliver",
+				From:      qm.From,
+				Payload:   qm.Payload,
+				MsgID:     qm.MsgID,
+				Timestamp: qm.Timestamp.UTC().Format(time.RFC3339),
+			})
+		}
 	}
 }
 
-// broadcastPresence invia un evento presenza a tutti gli altri utenti connessi.
 func (s *Server) broadcastPresence(src *Connection, status string) {
 	s.registry.mu.RLock()
 	defer s.registry.mu.RUnlock()
 	for id, c := range s.registry.conns {
 		if id == src.id {
-			continue // non mandare a se stesso
+			continue
 		}
 		c.write(RelayMsg{
-			Type:   "presence",
-			From:   src.id,
-			Payload: status, // "online" | "offline"
+			Type:    "presence",
+			From:    src.id,
+			Payload: status,
 		})
 	}
 }
 
 func (s *Server) handleSend(from *Connection, msg RelayMsg) {
-	if msg.To == "" || msg.Payload == "" || msg.MsgID == "" {
+	if msg.To == "" || msg.MsgID == "" {
+		return
+	}
+	sealed := msg.SealedPayload != ""
+	if !sealed && msg.Payload == "" {
 		return
 	}
 
 	qm := QueuedMsg{
-		From:      from.id,
 		To:        msg.To,
-		Payload:   msg.Payload,
 		MsgID:     msg.MsgID,
 		Timestamp: time.Now().UTC(),
+	}
+	if sealed {
+		qm.SealedPayload = msg.SealedPayload
+	} else {
+		qm.From = from.id
+		qm.Payload = msg.Payload
 	}
 
 	dest, online := s.registry.Get(msg.To)
 	if online {
-		// Consegna immediata
-		dest.write(RelayMsg{
-			Type:      "deliver",
-			From:      from.id,
-			Payload:   msg.Payload,
-			MsgID:     msg.MsgID,
-			Timestamp: qm.Timestamp.Format(time.RFC3339),
-		})
-		// Metti in coda temporaneamente fino all'ACK
+		// Delay casuale 0–255 ms per impedire correlazioni temporali (traffic analysis)
+		go s.deliverWithJitter(dest, qm, sealed, from.id, msg.Payload)
 		s.store.Enqueue(qm)
 	} else {
-		// Destinatario offline — metti in coda per 7 giorni
 		s.store.Enqueue(qm)
 	}
 
-	// Conferma ricezione al mittente
 	from.write(RelayMsg{Type: "sent_ok", MsgID: msg.MsgID})
 }
 
-// handleAck: il destinatario ha ricevuto e decriptato — rimuoviamo dalla coda
+// deliverWithJitter consegna il messaggio dopo un delay casuale 0–255 ms.
+func (s *Server) deliverWithJitter(dest *Connection, qm QueuedMsg, sealed bool, fromID, payload string) {
+	var jitter [1]byte
+	rand.Read(jitter[:])
+	time.Sleep(time.Duration(jitter[0]) * time.Millisecond)
+
+	if sealed {
+		dest.write(RelayMsg{
+			Type:          "deliver",
+			SealedPayload: qm.SealedPayload,
+			MsgID:         qm.MsgID,
+			Timestamp:     qm.Timestamp.Format(time.RFC3339),
+		})
+	} else {
+		dest.write(RelayMsg{
+			Type:      "deliver",
+			From:      fromID,
+			Payload:   payload,
+			MsgID:     qm.MsgID,
+			Timestamp: qm.Timestamp.Format(time.RFC3339),
+		})
+	}
+}
+
+// handleAck rimuove il messaggio da Redis dopo conferma di ricezione
 func (s *Server) handleAck(conn *Connection, msg RelayMsg) {
 	if msg.MsgID != "" {
 		s.store.DeleteOne(conn.id, msg.MsgID)
@@ -426,7 +467,7 @@ func checkWhitelist(identityHash string) bool {
 	resp, err := client.Get(adminURL + "/internal/whitelist/" + identityHash)
 	if err != nil {
 		log.Printf("[RELAY] Whitelist check fallito (admin irraggiungibile): %v", err)
-		return false // nega per default — sicurezza prima di tutto
+		return false
 	}
 	defer resp.Body.Close()
 	return resp.StatusCode == http.StatusOK
@@ -442,12 +483,12 @@ func main() {
 		}
 	}
 
-	port    := getEnv("PORT", "8082")
-	dbPath  := getEnv("MSG_DB_PATH", "/data/relay.db")
+	port      := getEnv("PORT", "8082")
+	redisAddr := getEnv("REDIS_ADDR", "localhost:6379")
 
-	store, err := NewMessageStore(dbPath)
+	store, err := NewMessageStore(redisAddr)
 	if err != nil {
-		log.Fatalf("Impossibile aprire message store (%s): %v", dbPath, err)
+		log.Fatalf("[RELAY] Impossibile connettersi a Redis (%s): %v", redisAddr, err)
 	}
 
 	srv := &Server{
@@ -458,12 +499,16 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/relay", srv.ServeWS)
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
+		// Health check: verifica anche la connessione Redis
+		if err := store.rdb.Ping(ctx).Err(); err != nil {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		w.WriteHeader(http.StatusOK)
 	})
 
-	log.Printf("[RELAY] In ascolto su :%s | TTL messaggi: %v", port, msgTTL)
+	log.Printf("[RELAY] In ascolto su :%s | Redis: %s | TTL messaggi: %v", port, redisAddr, msgTTL)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
 }
-

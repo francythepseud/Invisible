@@ -34,7 +34,7 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
     _showAddContactDialog(raw);
   }
 
-  /// Parsa il payload QR (JSON v1 o legacy stringa plain)
+  /// Parsa il payload QR (JSON v2/v1 o legacy stringa plain)
   _QRPayload? _parseQR(String raw) {
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -45,6 +45,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
           identityKey: json['ik'] as String?,
           signedPreKey: json['spk'] as String?,
           signedPreKeySig: json['sig'] as String?,
+          opkPub: json['opk'] as String?,
+          opkId: json['opki'] as int?,
         );
       }
     } catch (_) {
@@ -130,6 +132,8 @@ class _QRScannerScreenState extends State<QRScannerScreen> {
                   identityKey: payload.identityKey,
                   signedPreKey: payload.signedPreKey,
                   signedPreKeySig: payload.signedPreKeySig,
+                  opkPub: payload.opkPub,
+                  opkId: payload.opkId,
                 );
                 if (context.mounted) Navigator.of(context).pop(true);
               } catch (e) {
@@ -198,11 +202,15 @@ class _QRPayload {
   final String? identityKey;
   final String? signedPreKey;
   final String? signedPreKeySig;
+  final String? opkPub;
+  final int? opkId;
 
   _QRPayload({
     required this.masterKey,
     this.identityKey,
     this.signedPreKey,
     this.signedPreKeySig,
+    this.opkPub,
+    this.opkId,
   });
 }

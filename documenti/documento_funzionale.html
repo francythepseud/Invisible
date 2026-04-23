@@ -226,7 +226,7 @@
 
 <!-- COVER PAGE -->
 <div class="cover">
-  <div class="cover-label">Documento Funzionale — Versione 1.0</div>
+  <div class="cover-label">Documento Funzionale — Versione 2.0</div>
   <div class="cover-title">INVISIBLE</div>
   <div class="cover-subtitle">La comunicazione privata ridefinita.<br>Senza identità. Senza tracce. Senza compromessi.</div>
   <div class="cover-divider"></div>
@@ -293,12 +293,17 @@
   <h2>Punti chiave del prodotto</h2>
   <ul>
     <li><strong>Prima piattaforma di messaggistica commerciale senza identità registrata</strong> — nessun numero, email o dato personale richiesto</li>
-    <li><strong>Tre layer di cifratura sovrapposti</strong> — WireGuard (rete) + TLS 1.3 (trasporto) + Signal Protocol E2E (contenuto)</li>
+    <li><strong>Quattro layer di protezione sovrapposti</strong> — WireGuard (rete) + TLS 1.3 (trasporto) + Signal Protocol E2E (contenuto) + Sealed Sender (identità mittente nascosta al server)</li>
+    <li><strong>X3DH completo con One-Time PreKey</strong> — protocollo di scambio chiavi a 4 operazioni Diffie-Hellman (spec Signal completa), perfetta forward secrecy da subito</li>
     <li><strong>Rete mesh VPN integrata</strong> — gli IP reali non sono mai visibili al server né ai destinatari</li>
+    <li><strong>Safety Numbers</strong> — verifica fuori banda dell'identità del contatto (60 cifre, SHA-256 × 5120 iterazioni), protegge da MITM</li>
+    <li><strong>Identity Key Rotation</strong> — rotazione della chiave identità con firma di transizione, verificata tra peer senza server</li>
+    <li><strong>Traffic Analysis Mitigation</strong> — padding a blocchi fissi + jitter server + dummy keepalive client: un osservatore non può dedurre tipo o lunghezza dei messaggi</li>
     <li><strong>Multiprofilo con isolamento crittografico</strong> — identità completamente separate sullo stesso dispositivo</li>
     <li><strong>Panic button</strong> — cancellazione crittografica immediata di tutta l'identità e i dati</li>
     <li><strong>Database locale cifrato</strong> — SQLCipher AES-256, inaccessibile senza PIN</li>
-    <li><strong>Infrastruttura privata</strong> — nessuna dipendenza da server di terze parti (Meta, Google, Signal Foundation)</li>
+    <li><strong>Messaggi a scomparsa</strong> — timer per-conversazione (30s → 7gg) con secure delete automatico; TTL cifrato nel payload DR, invisible al relay</li>
+    <li><strong>Infrastruttura privata senza dipendenze Google</strong> — nessun FCM, nessun push notification server, connessione mantenuta da Foreground Service nativo Android</li>
     <li><strong>Chiamate audio e video P2P</strong> — il traffico media non transita mai dal server</li>
   </ul>
 </div>
@@ -363,7 +368,7 @@
   <p>WhatsApp utilizza il protocollo Signal per cifrare il contenuto dei messaggi, ma questo è l'unica concessione alla privacy. L'applicazione raccoglie sistematicamente i metadati delle comunicazioni e li condivide con l'ecosistema Meta (Facebook, Instagram). Richiede numero di telefono, espone l'IP all'infrastruttura Meta, e i backup cloud (Google Drive, iCloud) non sono coperti dalla cifratura E2E per default. Meta è soggetta alla legislazione americana FISA/CLOUD Act che obbliga alla collaborazione con le agenzie federali USA.</p>
 
   <h3>Signal</h3>
-  <p>Signal è la piattaforma più solida a livello crittografico tra quelle mainstream. Il protocollo crittografico è eccellente e il codice è open source e auditato. Tuttavia, Signal richiede un numero di telefono, gestisce server centralizzati (Signal Foundation), e il Sealed Sender — pur nascondendo il mittente — non garantisce l'anonimato dei metadati relazionali. Sotto pressione legale, Signal ha fornito metadati alle autorità (casi documentati 2016, 2021).</p>
+  <p>Signal è la piattaforma più solida a livello crittografico tra quelle mainstream. Il protocollo crittografico è eccellente e il codice è open source e auditato. Tuttavia, Signal richiede un numero di telefono, gestisce server centralizzati (Signal Foundation), e il Sealed Sender di Signal — pur nascondendo il mittente — non garantisce l'anonimato dei metadati relazionali, perché il server conosce comunque i numeri di telefono degli utenti. Sotto pressione legale, Signal ha fornito metadati alle autorità (casi documentati 2016, 2021). <strong>Invisible implementa il proprio Sealed Sender su infrastruttura privata, senza numero di telefono e senza alcun identificatore persistente sul server.</strong></p>
 
   <h3>Telegram</h3>
   <p>Telegram ha un approccio alla sicurezza profondamente problematico. La cifratura E2E è disponibile solo nelle "chat segrete" — non nelle chat normali né nei gruppi. Il protocollo MTProto è proprietario e non auditato indipendentemente. I server di Telegram possono leggere il contenuto di tutte le comunicazioni non segrete. Telegram è stato più volte al centro di controversie per la consegna di dati agli stati.</p>
@@ -397,6 +402,13 @@
         <td>IP reale nascosto al server</td>
         <td class="no">✗</td>
         <td class="no">✗</td>
+        <td class="no">✗</td>
+        <td class="yes">✓</td>
+      </tr>
+      <tr>
+        <td>Mittente nascosto al server (Sealed Sender)</td>
+        <td class="no">✗</td>
+        <td class="partial">~</td>
         <td class="no">✗</td>
         <td class="yes">✓</td>
       </tr>
@@ -549,6 +561,21 @@
   </ul>
   <p>Dopo l'attivazione del panic button, l'applicazione si presenta come nuova installazione, senza alcuna traccia del profilo precedente.</p>
 
+  <h3>Safety Numbers — Verifica Identità Fuori Banda</h3>
+  <p>Per ogni conversazione è disponibile uno schermo "Verifica identità" che mostra i Safety Numbers: 60 cifre generate da 5120 iterazioni SHA-256 delle chiavi identità di entrambi i partecipanti. Se i due utenti si confrontano i numeri di persona o via chiamata audio e coincidono, la comunicazione è autentica — nessun MITM è presente. Lo stesso algoritmo è usato da Signal.</p>
+
+  <h3>Identity Key Rotation</h3>
+  <p>In caso di sospetta compromissione della propria chiave identità, l'utente può ruotarla. Il sistema genera una firma di transizione (la vecchia chiave firma la nuova), che viene inviata a tutti i contatti via Sealed Sender. I contatti verificano la firma prima di accettare la nuova identità: nessun server partecipa, la verifica è distribuita tra i peer.</p>
+
+  <h3>Traffic Analysis Mitigation</h3>
+  <p>Un osservatore di rete non deve poter dedurre nulla dalle dimensioni o dal timing dei messaggi. Invisible implementa tre difese combinate: (1) <strong>padding a blocchi fissi</strong> — ogni messaggio è portato a dimensione 256B / 1KB / 8KB / 64KB / 512KB prima della cifratura; (2) <strong>jitter server</strong> — il relay introduce un ritardo casuale 0–255ms prima della consegna; (3) <strong>dummy keepalive client</strong> — l'app invia un ping fittizio casuale ogni 10–60 secondi anche quando non ci sono messaggi reali.</p>
+
+  <h3>Background senza Google (Foreground Service)</h3>
+  <p>Su Android, la connessione WebSocket al relay è mantenuta da un Foreground Service nativo (<code>START_STICKY</code>, tipo <code>connectedDevice</code>), senza alcuna dipendenza da Firebase Cloud Messaging, Google Play Services o qualsiasi sistema di push notification. Invisible non comunica con i server Google per mantenere la connettività.</p>
+
+  <h3>Messaggi a Scomparsa</h3>
+  <p>Ogni conversazione può avere un timer di auto-cancellazione configurabile dall'utente tramite il menu "···" → <strong>Messaggi a scomparsa</strong>. Le opzioni disponibili vanno da 30 secondi a 7 giorni (più "Disattivato"). Il timer è negoziato in modo sicuro: il TTL è incluso nel payload cifrato con Double Ratchet — il relay non vede mai la durata di vita del messaggio. Il conto alla rovescia parte dalla <strong>ricezione</strong> (non dall'invio). L'eliminazione avviene con secure delete (sovrascrittura casuale prima del DELETE) ogni 30 secondi in background. Il countdown residuo è visibile sulla bolla del messaggio.</p>
+
   <h3>Protezione backup</h3>
   <p>Il backup automatico di Android (Google Backup) è disabilitato a livello di manifest dell'applicazione. I dati di Invisible non vengono mai caricati su Google Drive o iCloud tramite i meccanismi standard di backup del sistema operativo.</p>
 </div>
@@ -680,7 +707,8 @@ Operatore telefonico:
   "Pacchetti UDP cifrati verso IP x.x.x.x — indistinguibili da traffico VPN"
 
 Server Invisible (relay):
-  "Ciphertext opaco — non so cosa contiene né chi sono mittente e destinatario reali"
+  "Sealed blob opaco — so solo chi è il destinatario (per instradare).
+   Il mittente è cifrato dentro la busta: non posso aprirla nemmeno volendo."
 
 Intercettatore rete:
   "Rumore casuale cifrato WireGuard + TLS — matematicamente indecifrabile"
@@ -898,6 +926,46 @@ Chiunque altro:
         <td class="no">No</td>
         <td class="yes">Sì</td>
       </tr>
+      <tr>
+        <td>Safety Numbers (verifica identità)</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Traffic analysis mitigation (padding + jitter)</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Nessun FCM / Google Play Services</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">N/A</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Identity Key Rotation peer-to-peer</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="no">No</td>
+        <td class="yes">Sì</td>
+      </tr>
+      <tr>
+        <td>Messaggi a scomparsa (TTL cifrato, secure delete)</td>
+        <td class="partial">Parziale</td>
+        <td class="yes">Sì</td>
+        <td class="partial">Parziale</td>
+        <td class="no">No</td>
+        <td class="yes">Sì (TTL nel DR)</td>
+      </tr>
     </tbody>
   </table>
 </div>
@@ -912,8 +980,8 @@ Chiunque altro:
   <p>Invisible risolve questo problema eliminandolo alla radice: non esiste un server di mapping identità. I contatti si scambiano le chiavi pubbliche direttamente, di persona o tramite canali privati. Il server non sa chi sei.</p>
 
   <h2>9.2 La Rete Mesh: Protezione dei Metadati</h2>
-  <p>Signal è crittograficamente eccellente ma il suo server sa quando sei online, con quali IP ti connetti, e — nonostante il Sealed Sender — può fare analisi statistiche sul traffico. WhatsApp fornisce metadati completi a Meta.</p>
-  <p>Invisible introduce un layer che nessuna piattaforma mainstream ha: una rete mesh VPN integrata che maschera gli IP reali anche a livello di infrastruttura server. Il relay vede solo IP interni (10.7.x.x). Non può costruire un grafo delle relazioni sociali basato sugli IP.</p>
+  <p>Signal è crittograficamente eccellente ma il suo server sa quando sei online, con quali IP ti connetti, e — nonostante il Sealed Sender — può fare analisi statistiche sul traffico perché conosce i numeri di telefono degli utenti. WhatsApp fornisce metadati completi a Meta.</p>
+  <p>Invisible introduce due layer che nessuna piattaforma mainstream combina: (1) una rete mesh VPN integrata che maschera gli IP reali a livello infrastrutturale — il relay vede solo IP interni (10.7.x.x); (2) il proprio <strong>Sealed Sender</strong> su infrastruttura privata, che nasconde il mittente al relay anche a livello crittografico — il server non può costruire un grafo delle relazioni sociali nemmeno sotto ordine giudiziario, perché l'informazione semplicemente non esiste.</p>
 
   <h2>9.3 L'Infrastruttura Privata: Nessun Terzo di Fiducia</h2>
   <p>Usando WhatsApp stai affidando la riservatezza delle tue comunicazioni a Meta, un'azienda quotata in borsa soggetta alla legge americana, con un modello di business basato sulla pubblicità. Usando Signal stai affidando la riservatezza a una fondazione non profit con buone intenzioni ma comunque soggetta a ordini giudiziari americani.</p>
@@ -923,11 +991,17 @@ Chiunque altro:
   <p>Invisible non inventa una crittografia proprietaria — scelta che sarebbe un grave errore di sicurezza. Usa il protocollo Signal (X3DH + Double Ratchet), lo stesso utilizzato da WhatsApp, Signal, Google Messages e Facebook Secret Conversations. Questo protocollo è il gold standard mondiale della messaggistica sicura, sviluppato dai migliori crittografi mondiali e auditato indipendentemente più volte.</p>
   <p>La forza di Invisible sta nel combinare questo protocollo con le protezioni aggiuntive che le altre piattaforme non hanno: anonimato dell'identità, protezione dei metadati, infrastruttura privata.</p>
 
-  <h2>9.5 Sintesi del Vantaggio Competitivo</h2>
+  <h2>9.5 Mitigazione Analisi del Traffico</h2>
+  <p>Signal e WhatsApp non implementano difese contro la <em>traffic analysis</em>: un osservatore che monitora la rete può correlare la dimensione e il timing dei pacchetti per dedurre quando gli utenti stanno scrivendo, la lunghezza dei messaggi, e persino i pattern di conversazione. Invisible implementa tre contromisure combinate che nessuna piattaforma mainstream ha: padding a blocchi fissi, jitter casuale lato server e dummy keepalive lato client — rendendo il traffico crittograficamente opaco anche sul piano dei metadati temporali e dimensionali.</p>
+
+  <h2>9.6 Indipendenza da Google</h2>
+  <p>WhatsApp, Signal, Telegram e praticamente tutte le app Android dipendono da Firebase Cloud Messaging (FCM) per ricevere notifiche e mantenere la connettività in background. FCM passa per i server Google, che quindi sa quando un utente usa l'app. Invisible mantiene la connessione tramite Foreground Service nativo — nessuna dipendenza da Google Play Services, nessun dato trasmesso a Google per il funzionamento.</p>
+
+  <h2>9.7 Sintesi del Vantaggio Competitivo</h2>
   <div class="highlight">
     <p>Signal protegge il <strong>contenuto</strong> ma non l'<strong>identità</strong> né i <strong>metadati</strong>.<br>
     WhatsApp protegge il <strong>contenuto</strong> ma vende i <strong>metadati</strong> e conosce l'<strong>identità</strong>.<br>
-    Invisible protegge il <strong>contenuto</strong>, l'<strong>identità</strong> e i <strong>metadati</strong>.</p>
+    Invisible protegge il <strong>contenuto</strong>, l'<strong>identità</strong>, i <strong>metadati</strong> e il <strong>pattern di traffico</strong>.</p>
     <p style="margin-top:12px; margin-bottom:0"><strong>Questa è la combinazione che nessuno ha ancora realizzato in un prodotto commerciale.</strong></p>
   </div>
 </div>
@@ -1031,19 +1105,25 @@ Chiunque altro:
       <tr><td>IP Mesh</td><td>Indirizzo IP privato assegnato all'interno della rete VPN WireGuard (es. 10.7.0.5). Non corrisponde all'IP reale del dispositivo.</td></tr>
       <tr><td>KeyStore / Keychain</td><td>Area hardware sicura del chip del dispositivo (Android/iOS) dove vengono conservate le chiavi crittografiche. Non accessibile ad app o processi esterni.</td></tr>
       <tr><td>PBKDF2</td><td>Password-Based Key Derivation Function 2. Algoritmo che trasforma un PIN in una chiave crittografica tramite 100.000 iterazioni di hashing, rendendo gli attacchi brute-force impraticabili.</td></tr>
+      <tr><td>Sealed Sender</td><td>Tecnica crittografica che nasconde l'identità del mittente al server di instradamento. Il mittente viene cifrato dentro la busta del messaggio usando una keypair X25519 effimera; solo il destinatario può aprire la busta e scoprire chi ha scritto.</td></tr>
       <tr><td>Signal Protocol</td><td>Protocollo crittografico sviluppato da Open Whisper Systems (oggi Signal Foundation). Considerato il gold standard della messaggistica sicura. Usato da WhatsApp, Signal, Google Messages.</td></tr>
       <tr><td>SQLCipher</td><td>Estensione di SQLite che cifra l'intero database con AES-256. I file del database sono indistinguibili da dati casuali senza la chiave corretta.</td></tr>
       <tr><td>TLS 1.3</td><td>Transport Layer Security versione 1.3. Il protocollo che protegge le connessioni HTTPS. Versione 1.3 è la più moderna e sicura, con perfect forward secrecy obbligatoria.</td></tr>
       <tr><td>WebRTC</td><td>Web Real-Time Communication. Standard aperto per comunicazioni audio/video P2P tra dispositivi, con cifratura SRTP/DTLS integrata.</td></tr>
       <tr><td>WireGuard</td><td>Protocollo VPN moderno, più veloce e sicuro di OpenVPN o IPSec. Utilizza ChaCha20 per cifratura e Curve25519 per lo scambio di chiavi.</td></tr>
       <tr><td>X25519</td><td>Algoritmo Diffie-Hellman su curva ellittica Curve25519. Usato per lo scambio di chiavi crittografiche senza trasmettere la chiave stessa.</td></tr>
-      <tr><td>X3DH</td><td>Extended Triple Diffie-Hellman. Protocollo per stabilire una chiave di sessione condivisa tra due utenti che non si sono mai comunicati prima, usando solo le loro chiavi pubbliche.</td></tr>
+      <tr><td>X3DH</td><td>Extended Triple Diffie-Hellman. Protocollo per stabilire una chiave di sessione condivisa tra due utenti che non si sono mai comunicati prima, usando solo le loro chiavi pubbliche. Invisible implementa X3DH completo con 4 operazioni DH (include One-Time PreKey).</td></tr>
+      <tr><td>One-Time PreKey (OPK)</td><td>Chiave X25519 usa-e-getta inclusa nel QR code v2. Viene usata una volta sola nel primo scambio X3DH, poi scartata. Aumenta la forward secrecy del protocollo.</td></tr>
+      <tr><td>Safety Numbers</td><td>Fingerprint a 60 cifre derivato dalle chiavi identità di entrambi i partecipanti (SHA-256 × 5120 iterazioni). Permette la verifica fuori banda dell'autenticità del contatto — se i numeri coincidono su entrambi i dispositivi, non c'è nessun MITM.</td></tr>
+      <tr><td>Traffic Analysis</td><td>Tecnica di sorveglianza che analizza dimensione e timing dei pacchetti cifrati per dedurre informazioni sulla comunicazione, senza decifrarla. Mitigata in Invisible con padding, jitter e dummy traffic.</td></tr>
+      <tr><td>Foreground Service</td><td>Servizio Android che gira in foreground con una notifica persistente, impedendo al sistema operativo di terminarlo. Usato da Invisible per mantenere la connessione WebSocket senza dipendere da Google FCM.</td></tr>
+      <tr><td>Identity Key Rotation</td><td>Procedura per sostituire la propria chiave identità compromessa. Una firma di transizione (old_key.sign(new_key)) permette ai contatti di verificare l'autenticità del cambio senza server intermediari.</td></tr>
     </tbody>
   </table>
 
   <div class="section-divider"></div>
   <div class="page-footer">
-    <span>INVISIBLE — Documento Funzionale v1.0</span>
+    <span>INVISIBLE — Documento Funzionale v2.0</span>
     <span>RISERVATO — Proprietà Intellettuale dell'Autore</span>
     <span>2026</span>
   </div>

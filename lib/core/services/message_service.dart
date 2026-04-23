@@ -11,6 +11,8 @@ import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:invisible/core/crypto/crypto_service.dart';
 import 'package:invisible/core/crypto/double_ratchet.dart';
 import 'package:invisible/core/crypto/media_crypto_service.dart';
+import 'package:invisible/core/crypto/message_padding.dart';
+import 'package:invisible/core/crypto/sealed_sender.dart';
 import 'package:invisible/core/network/invisible_client.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/core/services/conversation_service.dart';
@@ -83,17 +85,28 @@ class MessageService {
       final spk = contact.isNotEmpty
           ? contact.first['signed_pre_key'] as String?
           : null;
+      final opkPub = contact.isNotEmpty
+          ? contact.first['opk_pub'] as String?
+          : null;
+      final opkId = contact.isNotEmpty
+          ? contact.first['opk_id'] as int?
+          : null;
 
       ratchetState = await _conversationService.initializeSession(
         conversationId: conversationId,
         theirPublicKeyBase64: conversation.contactPublicKey,
         theirSignedPreKeyBase64: spk,
+        theirOPKBase64: opkPub,
+        theirOPKId: opkId,
       );
     }
 
     // Costruisce il plaintext DR come JSON strutturato (tipo + media dentro DR)
     final drPlaintext = await _buildDrPlaintext(plaintext, type, localPath);
-    final plaintextBytes = Uint8List.fromList(utf8.encode(drPlaintext));
+    // Padding a blocchi fissi: nasconde la lunghezza reale al relay e ad analisi forensi
+    final plaintextBytes = MessagePadding.pad(
+      Uint8List.fromList(utf8.encode(drPlaintext)),
+    );
 
     final encryptedMessage = await _doubleRatchet.encrypt(
       ratchetState,
@@ -197,20 +210,38 @@ class MessageService {
       debugPrint('[MSG] identityKey(len=${identityKey.length})=$identityKey');
       debugPrint('[MSG] Invio a hash(len=${toHash.length})=$toHash relayStatus=${InvisibleClient().status}');
 
-      // Payload esterno: solo ciphertext + header — il relay non vede altro
-      final outerPayload = base64Encode(
+      // Payload interno: ciphertext + header — il relay non vede altro.
+      // Se presente, include i metadati X3DH (solo per il primo messaggio).
+      final x3dhMeta = await _conversationService.loadRatchetX3dhMeta(conversationId);
+      final innerPayload = base64Encode(
         utf8.encode(jsonEncode({
           'ciphertext': ciphertextBase64,
           'header': headerJson,
+          if (x3dhMeta != null) 'x3dh_eph': x3dhMeta['eph'],
+          if (x3dhMeta != null && x3dhMeta['opk_id'] != null)
+            'x3dh_opk_id': x3dhMeta['opk_id'],
         })),
+      );
+
+      // Sealed Sender: il relay non conosce il mittente — è nascosto nella busta
+      final myKeys = await _profileService.getCurrentCryptoKeys();
+      if (myKeys == null) {
+        debugPrint('[MSG] Nessuna chiave profilo — impossibile sigillare');
+        return;
+      }
+      final recipientMasterPub = contactRows.first['public_key'] as String? ?? '';
+      final sealedPayload = await SealedSender.seal(
+        recipientMasterPubBase64: recipientMasterPub,
+        senderIdentityPubBase64: myKeys.identityKeyPublic,
+        innerPayload: innerPayload,
       );
 
       await InvisibleClient().sendMessage(
         toIdentityKeyHash: toHash,
-        encryptedPayload: outerPayload,
+        sealedPayload: sealedPayload,
       );
 
-      debugPrint('[MSG] Inviato OK');
+      debugPrint('[MSG] Inviato OK (sealed sender)');
       await updateMessageStatus(messageId, MessageStatus.sent);
     } catch (e) {
       debugPrint('[MSG] Errore invio: $e');
@@ -225,12 +256,14 @@ class MessageService {
     required String ciphertextBase64,
     required String headerJson,
     required String senderId,
+    String? x3dhEphemeralPub,
+    int? x3dhOpkId,
   }) async {
     RatchetState? ratchetState =
         await _conversationService.loadRatchetState(conversationId);
 
     if (ratchetState == null) {
-      // Prima ricezione: inizializza come ricevente usando ECDH simmetrico
+      // Prima ricezione: inizializza come ricevente con X3DH completo
       final conv = await _conversationService.getConversation(conversationId);
       if (conv == null) throw Exception('Conversation not found');
       final contactRows = await _db.query(
@@ -246,6 +279,8 @@ class MessageService {
         conversationId: conversationId,
         theirMasterKeyBase64: theirMasterKey,
         theirSpkBase64: theirSpk,
+        x3dhEphemeralPubBase64: x3dhEphemeralPub,
+        x3dhOpkId: x3dhOpkId,
       );
     }
 
@@ -278,6 +313,8 @@ class MessageService {
         conversationId: conversationId,
         theirMasterKeyBase64: theirMasterKey,
         theirSpkBase64: theirSpk,
+        x3dhEphemeralPubBase64: x3dhEphemeralPub,
+        x3dhOpkId: x3dhOpkId,
       );
       decryptedMessage = await _doubleRatchet.decrypt(ratchetState, encryptedMessage);
     }
@@ -287,8 +324,11 @@ class MessageService {
       decryptedMessage.newState,
     );
 
-    // Parsa il JSON strutturato dal plaintext DR
-    final drRaw = utf8.decode(decryptedMessage.plaintext);
+    // Rimuove il padding prima di interpretare il plaintext
+    final unpadded = MessagePadding.unpad(
+      Uint8List.fromList(decryptedMessage.plaintext),
+    );
+    final drRaw = utf8.decode(unpadded);
     final map = _parseDrJson(drRaw);
     final type = MessageType.values.firstWhere(
       (t) => t.name == map['t'],
@@ -477,21 +517,33 @@ class MessageService {
           await _conversationService.loadRatchetState(conversationId);
       if (ratchetState == null) return;
 
-      final plaintext = Uint8List.fromList(utf8.encode('{"t":"rr"}'));
+      final plaintext = MessagePadding.pad(
+        Uint8List.fromList(utf8.encode('{"t":"rr"}')),
+      );
       final enc = await _doubleRatchet.encrypt(ratchetState, plaintext);
       await _conversationService.updateRatchetState(conversationId, enc.newState);
 
       final headerJson = await _serializeMessageHeader(enc.header);
-      final outerPayload = base64Encode(utf8.encode(jsonEncode({
+      final innerPayload = base64Encode(utf8.encode(jsonEncode({
         'ciphertext': base64Encode(enc.ciphertext),
         'header': headerJson,
       })));
 
+      // Sealed Sender anche per le read receipt
+      final myKeys = await _profileService.getCurrentCryptoKeys();
+      if (myKeys == null) return;
+      final recipientMasterPub = contactRows.first['public_key'] as String? ?? '';
+      final sealedPayload = await SealedSender.seal(
+        recipientMasterPubBase64: recipientMasterPub,
+        senderIdentityPubBase64: myKeys.identityKeyPublic,
+        innerPayload: innerPayload,
+      );
+
       await InvisibleClient().sendMessage(
         toIdentityKeyHash: toHash,
-        encryptedPayload: outerPayload,
+        sealedPayload: sealedPayload,
       );
-      debugPrint('[MSG] Read receipt inviata a $toHash');
+      debugPrint('[MSG] Read receipt inviata a $toHash (sealed sender)');
     } catch (e) {
       debugPrint('[MSG] Errore invio read receipt: $e');
     }
@@ -509,21 +561,108 @@ class MessageService {
     );
   }
 
+  /// Elimina un messaggio con secure delete:
+  /// sovrascrive ciphertext e decrypted_text con dati casuali prima del DELETE.
+  /// Su storage flash questo impedisce il recupero forense del contenuto.
   Future<void> deleteMessage(String messageId) async {
+    await _db.rawUpdate(
+      'UPDATE messages SET ciphertext=?, message_header=?, decrypted_text=NULL WHERE id=?',
+      [_randomFill(128), '{}', messageId],
+    );
     await _db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
     _plaintextCache.remove(messageId);
   }
 
-  /// Elimina tutti i messaggi più vecchi di [days] giorni.
-  /// Usato dalla scadenza automatica configurabile dall'utente.
-  Future<void> deleteExpiredMessages(int days) async {
-    final cutoff = DateTime.now().subtract(Duration(days: days));
+  /// Elimina tutti i messaggi più vecchi di [hours] ore con secure delete.
+  Future<void> deleteExpiredMessages(int hours) async {
+    final cutoff = DateTime.now().subtract(Duration(hours: hours));
+    // Sovrascrive prima di eliminare
+    await _db.rawUpdate(
+      'UPDATE messages SET ciphertext=?, message_header=?, decrypted_text=NULL WHERE timestamp < ?',
+      [_randomFill(128), '{}', cutoff.toIso8601String()],
+    );
     await _db.delete(
       'messages',
       where: 'timestamp < ?',
       whereArgs: [cutoff.toIso8601String()],
     );
     _plaintextCache.clear();
+  }
+
+  /// Genera una stringa base64 casuale di [bytes] byte per secure overwrite.
+  String _randomFill(int bytes) {
+    final rng = Random.secure();
+    final data = List.generate(bytes, (_) => rng.nextInt(256));
+    return base64Encode(data);
+  }
+
+  /// Invia un messaggio di rotazione identity key a tutti i contatti con sessione attiva.
+  ///
+  /// [newIdentityKeyPublic] = nuova identity key Ed25519 pubblica (base64)
+  /// [newMasterKeyPublic]   = nuova master key X25519 pubblica (base64)
+  /// [transitionSig]        = firma old_ik(new_ik_pub || new_mk_pub) (base64)
+  Future<void> broadcastKeyRotation({
+    required String newIdentityKeyPublic,
+    required String newMasterKeyPublic,
+    required String transitionSig,
+  }) async {
+    final db = _profileService.currentDatabase;
+    if (db == null) return;
+
+    final rotationPayload = jsonEncode({
+      't': 'key_rotation',
+      'new_ik': newIdentityKeyPublic,
+      'new_mk': newMasterKeyPublic,
+      'sig': transitionSig,
+    });
+
+    // Invia a tutti i contatti che hanno una sessione ratchet attiva
+    final conversations = await db.query('conversations');
+    for (final conv in conversations) {
+      final convId = conv['id'] as String;
+      final ratchetExists = await _conversationService.loadRatchetState(convId);
+      if (ratchetExists == null) continue;
+
+      try {
+        final ratchet = ratchetExists;
+        final paddedBytes = MessagePadding.pad(
+          Uint8List.fromList(utf8.encode(rotationPayload)),
+        );
+        final enc = await _doubleRatchet.encrypt(ratchet, paddedBytes);
+        await _conversationService.updateRatchetState(convId, enc.newState);
+
+        final headerJson = await _serializeMessageHeader(enc.header);
+        final contactRows = await db.query(
+          'contacts', where: 'id = ?', whereArgs: [conv['contact_id']],
+        );
+        if (contactRows.isEmpty) continue;
+
+        final identityKey = contactRows.first['identity_key'] as String?;
+        if (identityKey == null) continue;
+        final toHash = identityKey.length > 32
+            ? identityKey.substring(identityKey.length - 32)
+            : identityKey;
+
+        final myKeys = await _profileService.getCurrentCryptoKeys();
+        if (myKeys == null) continue;
+        final recipientMasterPub = contactRows.first['public_key'] as String? ?? '';
+        final innerPayload = base64Encode(utf8.encode(jsonEncode({
+          'ciphertext': base64Encode(enc.ciphertext),
+          'header': headerJson,
+        })));
+        final sealedPayload = await SealedSender.seal(
+          recipientMasterPubBase64: recipientMasterPub,
+          senderIdentityPubBase64: myKeys.identityKeyPublic,
+          innerPayload: innerPayload,
+        );
+        await InvisibleClient().sendMessage(
+          toIdentityKeyHash: toHash,
+          sealedPayload: sealedPayload,
+        );
+      } catch (e) {
+        debugPrint('[MSG] Errore broadcast key_rotation a convId=$convId: $e');
+      }
+    }
   }
 
   Future<int> getMessageCount(String conversationId) async {

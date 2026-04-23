@@ -4,6 +4,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:invisible/core/crypto/crypto_service.dart';
 import 'package:invisible/core/crypto/double_ratchet.dart';
+import 'package:invisible/core/crypto/x3dh.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/models/conversation.dart';
 import 'package:invisible/models/contact.dart';
@@ -90,132 +91,135 @@ class ConversationService {
     return conversation;
   }
 
-  /// Inizializza sessione crittografica come mittente.
-  /// Usa ECDH statico simmetrico (senza chiavi effimere) così entrambi i lati
-  /// possono derivare lo stesso sharedSecret indipendentemente.
+  /// Inizializza sessione come mittente usando X3DH completo.
+  ///
+  /// DH1 = DH(myIdentity, theirSPK)
+  /// DH2 = DH(ephemeral,  theirIdentity)
+  /// DH3 = DH(ephemeral,  theirSPK)
+  /// DH4 = DH(ephemeral,  theirOPK)   [opzionale]
+  ///
+  /// L'ephemeral key è inclusa nel primo messaggio (header DR).
+  /// Il ricevente la usa per completare X3DH lato responder.
   Future<RatchetState> initializeSession({
     required String conversationId,
-    required String theirPublicKeyBase64,
+    required String theirPublicKeyBase64,      // X25519 master key (identity DH)
     String? theirSignedPreKeyBase64,
+    String? theirOPKBase64,
+    int? theirOPKId,
   }) async {
     final keys = await _profileService.getCurrentCryptoKeys();
     if (keys == null) throw Exception('No crypto keys found');
 
-    // Master key X25519 come long-term DH identity key
-    final myIdentityKeyPair = await _generateKeyPairFromBytes(
+    final myIdentityKP = await _generateKeyPairFromBytes(
       base64Decode(keys.masterKeyPrivate),
       base64Decode(keys.masterKeyPublic),
     );
 
-    // SPK locale (chiave DH separata)
-    final mySpkKeyPair = await _generateKeyPairFromBytes(
-      base64Decode(keys.signedPreKeyPrivate),
-      base64Decode(keys.signedPreKeyPublic),
-    );
-
-    // Identity pubkey del destinatario (X25519 master key)
     final theirIdentityKey = SimplePublicKey(
-      base64Decode(theirPublicKeyBase64),
-      type: KeyPairType.x25519,
+      base64Decode(theirPublicKeyBase64), type: KeyPairType.x25519,
     );
-
     final theirSpkBytes = theirSignedPreKeyBase64 != null
         ? base64Decode(theirSignedPreKeyBase64)
         : base64Decode(theirPublicKeyBase64);
-    final theirSignedPreKey = SimplePublicKey(
-      theirSpkBytes,
-      type: KeyPairType.x25519,
-    );
+    final theirSpk = SimplePublicKey(theirSpkBytes, type: KeyPairType.x25519);
 
-    // Shared secret simmetrico: entrambi i lati possono derivarlo indipendentemente
-    // perché DH è commutativo: DH(A_priv, B_pub) == DH(B_priv, A_pub)
-    final sharedSecret = await _computeSymmetricSharedSecret(
-      myIdentityKeyPair: myIdentityKeyPair,
-      mySpkKeyPair: mySpkKeyPair,
+    PublicKey? theirOPK;
+    if (theirOPKBase64 != null) {
+      theirOPK = SimplePublicKey(base64Decode(theirOPKBase64), type: KeyPairType.x25519);
+    }
+
+    // X3DH completo (3 o 4 DH operations)
+    final x3dh = X3DH();
+    final x3dhResult = await x3dh.performAsInitiator(
+      myIdentityKey: myIdentityKP,
       theirIdentityKey: theirIdentityKey,
-      theirSpk: theirSignedPreKey,
+      theirSignedPreKey: theirSpk,
+      theirOneTimePreKey: theirOPK,
     );
 
+    final ephemeralPub = base64Encode(
+      (x3dhResult.ephemeralPublicKey as SimplePublicKey).bytes,
+    );
+
+    // Double Ratchet inizializzato con shared secret X3DH
+    // La chiave DH ratchet iniziale è la SPK del destinatario
     final ratchetState = await _doubleRatchet.initializeAsSender(
-      sharedSecret: sharedSecret,
-      theirRatchetPublicKey: theirSignedPreKey,
+      sharedSecret: x3dhResult.sharedSecret,
+      theirRatchetPublicKey: theirSpk,
     );
 
-    await _saveRatchetState(conversationId, ratchetState);
+    await _saveRatchetState(
+      conversationId, ratchetState,
+      x3dhEphemeralPub: ephemeralPub,
+      x3dhOpkId: theirOPKId,
+    );
     return ratchetState;
   }
 
-  /// Inizializza sessione crittografica come ricevente.
-  /// Chiamato quando arriva il primo messaggio e non esiste ancora ratchet state.
+  /// Inizializza sessione come ricevente usando X3DH completo.
+  ///
+  /// [x3dhEphemeralPubBase64] = chiave effimera X25519 del mittente (dall'header del primo messaggio)
+  /// [x3dhOpkId]              = ID della OPK usata dal mittente (opzionale)
   Future<RatchetState> initializeSessionAsReceiver({
     required String conversationId,
     required String theirMasterKeyBase64,
     required String theirSpkBase64,
+    String? x3dhEphemeralPubBase64,
+    int? x3dhOpkId,
   }) async {
     final keys = await _profileService.getCurrentCryptoKeys();
     if (keys == null) throw Exception('No crypto keys found');
 
-    final myIdentityKeyPair = await _generateKeyPairFromBytes(
+    final myIdentityKP = await _generateKeyPairFromBytes(
       base64Decode(keys.masterKeyPrivate),
       base64Decode(keys.masterKeyPublic),
     );
-    final mySpkKeyPair = await _generateKeyPairFromBytes(
+    final mySpkKP = await _generateKeyPairFromBytes(
       base64Decode(keys.signedPreKeyPrivate),
       base64Decode(keys.signedPreKeyPublic),
     );
 
     final theirIdentityKey = SimplePublicKey(
-      base64Decode(theirMasterKeyBase64),
-      type: KeyPairType.x25519,
+      base64Decode(theirMasterKeyBase64), type: KeyPairType.x25519,
     );
     final theirSpkBytes = theirSpkBase64.isNotEmpty
         ? base64Decode(theirSpkBase64)
         : base64Decode(theirMasterKeyBase64);
-    final theirSpk = SimplePublicKey(theirSpkBytes, type: KeyPairType.x25519);
+    final theirEphKey = x3dhEphemeralPubBase64 != null
+        ? SimplePublicKey(base64Decode(x3dhEphemeralPubBase64), type: KeyPairType.x25519)
+        : SimplePublicKey(theirSpkBytes, type: KeyPairType.x25519);
 
-    // Stesso calcolo del lato mittente — simmetrico per costruzione
-    final sharedSecret = await _computeSymmetricSharedSecret(
-      myIdentityKeyPair: myIdentityKeyPair,
-      mySpkKeyPair: mySpkKeyPair,
+    // Recupera OPK privata se indicata dal mittente
+    SimpleKeyPair? myOPKKP;
+    if (x3dhOpkId != null) {
+      final opkRow = await _profileService.getOPKById(x3dhOpkId);
+      if (opkRow != null) {
+        myOPKKP = await _generateKeyPairFromBytes(
+          base64Decode(opkRow['private_key'] as String),
+          base64Decode(opkRow['public_key'] as String),
+        );
+        // Segna come usata — usa-e-getta
+        await _profileService.markOPKUsed(x3dhOpkId);
+      }
+    }
+
+    // X3DH completo lato responder
+    final x3dh = X3DH();
+    final sharedSecret = await x3dh.performAsResponder(
+      myIdentityKey: myIdentityKP,
+      mySignedPreKey: mySpkKP,
+      myOneTimePreKey: myOPKKP,
       theirIdentityKey: theirIdentityKey,
-      theirSpk: theirSpk,
+      theirEphemeralKey: theirEphKey,
     );
 
     final ratchetState = await _doubleRatchet.initializeAsReceiver(
       sharedSecret: sharedSecret,
-      ourRatchetKeyPair: mySpkKeyPair,
+      ourRatchetKeyPair: mySpkKP,
     );
 
     await _saveRatchetState(conversationId, ratchetState);
     return ratchetState;
-  }
-
-  /// Derivazione ECDH simmetrica: stesso risultato da entrambi i lati.
-  ///
-  /// Usa solo DH(myIdentity, theirIdentity) che è trivialmente simmetrico:
-  ///   DH(A_priv, B_pub) == DH(B_priv, A_pub)
-  /// Il Double Ratchet garantisce forward secrecy dopo l'handshake iniziale.
-  Future<Uint8List> _computeSymmetricSharedSecret({
-    required SimpleKeyPair myIdentityKeyPair,
-    required SimpleKeyPair mySpkKeyPair,
-    required PublicKey theirIdentityKey,
-    required PublicKey theirSpk,
-  }) async {
-    final x25519 = X25519();
-    final hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
-
-    // DH simmetrico identity-to-identity: stesso valore da entrambi i lati
-    final dh = await (await x25519.sharedSecretKey(
-      keyPair: myIdentityKeyPair,
-      remotePublicKey: theirIdentityKey,
-    )).extractBytes();
-
-    final derived = await hkdf.deriveKey(
-      secretKey: SecretKey(Uint8List.fromList(dh)),
-      nonce: Uint8List(32),
-      info: utf8.encode('Invisible-X3DH'),
-    );
-    return Uint8List.fromList(await derived.extractBytes());
   }
 
   /// Carica stato ratchet dal database
@@ -235,8 +239,10 @@ class ConversationService {
   /// Salva stato ratchet nel database
   Future<void> _saveRatchetState(
     String conversationId,
-    RatchetState state,
-  ) async {
+    RatchetState state, {
+    String? x3dhEphemeralPub,
+    int? x3dhOpkId,
+  }) async {
 
     final ourPrivateKey = await state.ourRatchetKeyPair.extractPrivateKeyBytes();
     final ourPublicKey = await state.ourRatchetKeyPair.extractPublicKey();
@@ -264,6 +270,8 @@ class ConversationService {
       receiveCount: state.receiveCount,
       previousSendCount: state.previousSendCount,
       updatedAt: DateTime.now(),
+      x3dhEphemeralPub: x3dhEphemeralPub,
+      x3dhOpkId: x3dhOpkId,
     );
 
     // Cancella stato precedente
@@ -275,6 +283,24 @@ class ConversationService {
 
     // Inserisci nuovo stato
     await _db.insert('ratchet_states', model.toMap());
+  }
+
+  /// Carica i metadati X3DH dello stato ratchet (ephemeral pub + opk id).
+  /// Restituisce null se non esiste uno stato o se i campi sono assenti.
+  Future<Map<String, dynamic>?> loadRatchetX3dhMeta(String conversationId) async {
+    final maps = await _db.query(
+      'ratchet_states',
+      columns: ['x3dh_ephemeral_pub', 'x3dh_opk_id'],
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+    );
+    if (maps.isEmpty) return null;
+    final eph = maps.first['x3dh_ephemeral_pub'] as String?;
+    if (eph == null) return null;
+    return {
+      'eph': eph,
+      'opk_id': maps.first['x3dh_opk_id'] as int?,
+    };
   }
 
   /// Aggiorna stato ratchet

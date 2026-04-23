@@ -22,6 +22,7 @@ import 'package:invisible/features/calls/screens/call_screen.dart';
 import 'package:invisible/features/chat/widgets/audio_message_bubble.dart';
 import 'package:invisible/models/contact.dart';
 import 'package:invisible/models/conversation.dart';
+import 'package:invisible/features/chat/screens/safety_numbers_screen.dart';
 import 'package:invisible/models/message.dart';
 import 'package:invisible/utils/constants.dart';
 
@@ -90,6 +91,7 @@ class _ChatScreenState extends State<ChatScreen> {
         .readReceiptStream
         .where((convId) => convId == widget.conversation.id)
         .listen((_) => _onReadReceiptReceived());
+
   }
 
   void _onIncomingMessage(Message message) {
@@ -777,7 +779,32 @@ class _ChatScreenState extends State<ChatScreen> {
           tooltip: 'Videochiamata',
           onPressed: _startVideoCall,
         ),
-        IconButton(icon: const Icon(Icons.more_vert), onPressed: () {}),
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.more_vert),
+          onSelected: (value) async {
+            if (value == 'safety_numbers') {
+              final contact = await _getContact();
+              if (contact == null || !mounted) return;
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SafetyNumbersScreen(contact: contact),
+                ),
+              );
+            }
+          },
+          itemBuilder: (ctx) => [
+            const PopupMenuItem(
+              value: 'safety_numbers',
+              child: Row(
+                children: [
+                  Icon(Icons.verified_user_outlined, size: 20),
+                  SizedBox(width: 12),
+                  Text('Verifica identità'),
+                ],
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -1066,17 +1093,17 @@ class _ChatScreenState extends State<ChatScreen> {
             : const LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [Color(0xFF1E2235), Color(0xFF161929)],
+                colors: [Color(0xFF0D3D4A), Color(0xFF082530)],
               ),
         borderRadius: bubbleRadius,
         border: isOut
             ? Border.all(color: const Color(0xFF9F5FFF).withValues(alpha: 0.3), width: 1)
-            : Border.all(color: const Color(0xFF3A4060).withValues(alpha: 0.6), width: 1),
+            : Border.all(color: const Color(0xFF1A6B7A).withValues(alpha: 0.5), width: 1),
         boxShadow: [
           BoxShadow(
             color: isOut
                 ? const Color(0xFF7C3AED).withValues(alpha: 0.3)
-                : Colors.black.withValues(alpha: 0.25),
+                : const Color(0xFF0D3D4A).withValues(alpha: 0.4),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1205,7 +1232,7 @@ class _ChatScreenState extends State<ChatScreen> {
               ),
               child: Icon(
                 Icons.insert_drive_file_rounded,
-                color: isOut ? Colors.white : AppConstants.primaryBlue,
+                color: isOut ? Colors.white : const Color(0xFF7DD8E4),
                 size: 22,
               ),
             ),
@@ -1214,7 +1241,7 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Text(
                 text,
                 style: TextStyle(
-                  color: isOut ? Colors.white : AppConstants.textPrimary,
+                  color: isOut ? Colors.white : const Color(0xFFCCF0F5),
                   fontSize: 14,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -1237,7 +1264,7 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Text(
         text,
         style: TextStyle(
-          color: isOut ? Colors.white : const Color(0xFFE2E8F0),
+          color: isOut ? Colors.white : const Color(0xFFCCF0F5),
           fontSize: 15,
           height: 1.45,
           letterSpacing: 0.1,
@@ -1295,7 +1322,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   Text(
                     'Posizione',
                     style: TextStyle(
-                      color: isOut ? Colors.white : AppConstants.textPrimary,
+                      color: isOut ? Colors.white : const Color(0xFFCCF0F5),
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
                     ),
@@ -1308,7 +1335,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     style: TextStyle(
                       color: isOut
                           ? Colors.white70
-                          : AppConstants.textSecondary,
+                          : const Color(0xFF99D8E0),
                       fontSize: 12,
                     ),
                   ),

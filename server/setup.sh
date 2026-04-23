@@ -243,6 +243,7 @@ echo "[OK] TLS Let's Encrypt configurato (rsa-4096, rinnovo automatico)"
 # ── 9. File .env per docker-compose ──────────────────────────────────────────
 VPS_IP=$(curl -s https://api.ipify.org)
 POSTGRES_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 40)
+REDIS_PASSWORD=$(openssl rand -base64 32 | tr -d '/+=' | head -c 40)
 JWT_SECRET=$(openssl rand -base64 48 | tr -d '/+=' | head -c 64)
 ADMIN_TOKEN=$(openssl rand -hex 32)
 
@@ -252,6 +253,7 @@ SERVER_WG_PRIV=$WG_PRIV
 SERVER_WG_PUB=$WG_PUB
 DOMAIN=$DOMAIN
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+REDIS_PASSWORD=$REDIS_PASSWORD
 JWT_SECRET=$JWT_SECRET
 ADMIN_TOKEN=$ADMIN_TOKEN
 EOF
@@ -288,6 +290,7 @@ echo "║  [OK] Fail2ban: SSH ban 24h, nginx anti-bot                  ║"
 echo "║  [OK] Kernel hardening: anti-SYN flood, anti-spoof           ║"
 echo "║  [OK] TLS 1.3 + RSA-4096 + rinnovo automatico               ║"
 echo "║  [OK] Docker: log rotation attiva                            ║"
+echo "║  [OK] Redis: AOF persistence, password generata              ║"
 echo "║  [OK] Aggiornamenti sicurezza automatici                     ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 echo "║  ADMIN DASHBOARD                                             ║"

@@ -2,7 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
@@ -35,6 +36,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   bool _ringtoneStopped = false;
   Timer? _vibrationTimer;
   StreamSubscription<CallState>? _callStateSub;
+  String? _ringtonePath;
 
   @override
   void initState() {
@@ -67,35 +69,33 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
   }
 
   Future<void> _startRingtone() async {
-    _player = AudioPlayer();
     try {
-      // Configura sessione audio per la ringtone.
-      // iOS: playAndRecord obbligatorio per suonare con silent switch attivo;
-      //   mixWithOthers permette a WebRTC di sovrascrivere la sessione senza conflitti.
-      // Android: gain (non transient) così quando il ringtone termina AudioFocus
-      //   viene rilasciato esplicitamente e WebRTC può reclamare il focus audio.
-      await _player!.setAudioContext(AudioContext(
-        iOS: AudioContextIOS(
-          category: AVAudioSessionCategory.playAndRecord,
-          options: const {
-            AVAudioSessionOptions.mixWithOthers,
-          },
+      // Configura sessione audio
+      final session = await AudioSession.instance;
+      await session.configure(AudioSessionConfiguration(
+        avAudioSessionCategory: AVAudioSessionCategory.playAndRecord,
+        avAudioSessionCategoryOptions:
+            AVAudioSessionCategoryOptions.mixWithOthers |
+            AVAudioSessionCategoryOptions.allowBluetooth,
+        avAudioSessionMode: AVAudioSessionMode.voiceChat,
+        androidAudioAttributes: AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.sonification,
+          usage: AndroidAudioUsage.notificationRingtone,
         ),
-        android: AudioContextAndroid(
-          isSpeakerphoneOn: false,
-          stayAwake: true,
-          contentType: AndroidContentType.sonification,
-          usageType: AndroidUsageType.notificationRingtone,
-          audioFocus: AndroidAudioFocus.gain,
-        ),
+        androidAudioFocusGainType: AndroidAudioFocusGainType.gain,
       ));
-      await _player!.setVolume(1.0);
-      await _player!.setReleaseMode(ReleaseMode.loop);
-      // Salva su file temporaneo (BytesSource non è supportato su iOS)
+
+      // Salva WAV su file temporaneo
       final tmpDir = await getTemporaryDirectory();
       final ringFile = File('${tmpDir.path}/incoming_ring.wav');
       await ringFile.writeAsBytes(_generateRingtoneWav());
-      await _player!.play(DeviceFileSource(ringFile.path));
+      _ringtonePath = ringFile.path;
+
+      _player = AudioPlayer();
+      await _player!.setLoopMode(LoopMode.one);
+      await _player!.setVolume(1.0);
+      await _player!.setFilePath(_ringtonePath!);
+      await _player!.play();
     } catch (e) {
       debugPrint('[CALL] Ringtone error: $e');
     }

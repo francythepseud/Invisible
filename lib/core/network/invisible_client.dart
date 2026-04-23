@@ -6,6 +6,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:invisible/core/crypto/sealed_sender.dart';
 import 'package:invisible/core/network/pinned_http_client.dart';
 import 'package:invisible/core/services/profile_service.dart';
 
@@ -56,6 +57,7 @@ class InvisibleClient {
   WebSocketChannel? _channel;
   Timer? _pingTimer;
   Timer? _reconnectTimer;
+  Timer? _dummyTimer;
   Duration _currentReconnectDelay = _reconnectDelay;
   bool _intentionalDisconnect = false;
   String? _relayUrl;
@@ -126,8 +128,8 @@ class InvisibleClient {
           _intentionalDisconnect = true;
           await disconnect();
         case 'deliver':
-          debugPrint('[RELAY] deliver ricevuto da from=${msg['from']}');
-          _handleDeliver(msg);
+          debugPrint('[RELAY] deliver ricevuto');
+          await _handleDeliver(msg);
         case 'presence':
           final userId = msg['from'] as String?;
           final status = msg['payload'] as String?;
@@ -172,29 +174,59 @@ class InvisibleClient {
     });
   }
 
-  void _handleDeliver(Map<String, dynamic> msg) {
+  Future<void> _handleDeliver(Map<String, dynamic> msg) async {
     try {
-      final incoming = IncomingRelayMessage(
-        fromId: msg['from'] as String,
-        payload: msg['payload'] as String,
-        msgId: msg['msg_id'] as String,
-        timestamp: DateTime.parse(msg['timestamp'] as String),
-      );
-      debugPrint('[RELAY] _handleDeliver OK fromId=${incoming.fromId} msgId=${incoming.msgId}');
-      _messageController.add(incoming);
-      // Invia ACK al server per confermare ricezione
-      _send({'type': 'ack', 'msg_id': incoming.msgId});
+      final msgId = msg['msg_id'] as String;
+      final timestamp = DateTime.parse(msg['timestamp'] as String);
+
+      final sealedJson = msg['sealed_payload'] as String?;
+      if (sealedJson != null) {
+        // Sealed sender: apri la busta con la nostra master X25519 key
+        final keys = await _profileService.getCurrentCryptoKeys();
+        if (keys == null) {
+          debugPrint('[RELAY] _handleDeliver: no keys per unseal');
+          return;
+        }
+        final sealed = await SealedSender.unseal(
+          ourMasterPrivBase64: keys.masterKeyPrivate,
+          ourMasterPubBase64: keys.masterKeyPublic,
+          sealedJson: sealedJson,
+        );
+        // fromId = shortHash dell'identity key del mittente (ultimi 32 char)
+        final ik = sealed.senderIdentityKey;
+        final fromId = ik.length > 32 ? ik.substring(ik.length - 32) : ik;
+        final incoming = IncomingRelayMessage(
+          fromId: fromId,
+          payload: sealed.innerPayload,
+          msgId: msgId,
+          timestamp: timestamp,
+        );
+        debugPrint('[RELAY] _handleDeliver sealed OK fromId=$fromId msgId=$msgId');
+        _messageController.add(incoming);
+        _send({'type': 'ack', 'msg_id': msgId});
+      } else {
+        // Legacy non-sealed (backward compat)
+        final incoming = IncomingRelayMessage(
+          fromId: msg['from'] as String? ?? '',
+          payload: msg['payload'] as String? ?? '',
+          msgId: msgId,
+          timestamp: timestamp,
+        );
+        debugPrint('[RELAY] _handleDeliver legacy fromId=${incoming.fromId} msgId=$msgId');
+        _messageController.add(incoming);
+        _send({'type': 'ack', 'msg_id': msgId});
+      }
     } catch (e) {
       debugPrint('[RELAY] _handleDeliver errore: $e  msg=$msg');
     }
   }
 
-  /// Invia un messaggio E2E cifrato al destinatario.
-  /// [toIdentityKeyHash] = SHA-256 base64 dell'identity key Ed25519 del destinatario
-  /// [encryptedPayload]  = base64 del ciphertext prodotto dal Double Ratchet
+  /// Invia un messaggio E2E cifrato al destinatario via Sealed Sender.
+  /// [toIdentityKeyHash] = shortHash (ultimi 32 char) dell'identity key Ed25519 del destinatario
+  /// [sealedPayload]     = busta sealed-sender JSON (SealedSender.seal())
   Future<void> sendMessage({
     required String toIdentityKeyHash,
-    required String encryptedPayload,
+    required String sealedPayload,
   }) async {
     if (_status != RelayStatus.connected) {
       throw Exception('Relay non connesso');
@@ -203,7 +235,7 @@ class InvisibleClient {
     _send({
       'type': 'send',
       'to': toIdentityKeyHash,
-      'payload': encryptedPayload,
+      'sealed_payload': sealedPayload,
       'msg_id': msgId,
     });
   }
@@ -219,6 +251,24 @@ class InvisibleClient {
     _pingTimer = Timer.periodic(_pingInterval, (_) {
       _send({'type': 'ping'});
     });
+    _scheduleDummyTraffic();
+  }
+
+  /// Invia ping con intervalli casuali (10–60 s) per rendere difficile
+  /// la correlazione temporale mittente↔destinatario (traffic analysis).
+  void _scheduleDummyTraffic() {
+    _dummyTimer?.cancel();
+    final delay = Duration(
+      milliseconds: 10000 + Random.secure().nextInt(50000),
+    );
+    _dummyTimer = Timer(delay, () {
+      if (_status == RelayStatus.connected) {
+        _send({'type': 'ping', 'nonce': base64Encode(
+          List.generate(16, (_) => Random.secure().nextInt(256)),
+        )});
+        _scheduleDummyTraffic();
+      }
+    });
   }
 
   void _onError(Object error) {
@@ -227,6 +277,7 @@ class InvisibleClient {
 
   void _onDone() {
     _pingTimer?.cancel();
+    _dummyTimer?.cancel();
     if (!_intentionalDisconnect) {
       _updateStatus(RelayStatus.reconnecting);
       _scheduleReconnect();
@@ -251,6 +302,7 @@ class InvisibleClient {
     _intentionalDisconnect = true;
     _pingTimer?.cancel();
     _reconnectTimer?.cancel();
+    _dummyTimer?.cancel();
     await _channel?.sink.close();
     _channel = null;
     _updateStatus(RelayStatus.disconnected);

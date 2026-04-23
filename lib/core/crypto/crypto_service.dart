@@ -198,6 +198,80 @@ class CryptoService {
     return base64Encode(hash.bytes);
   }
 
+  /// Ruota la Identity Key Ed25519 e la Master Key X25519.
+  ///
+  /// Genera nuove chiavi e crea una firma di transizione:
+  ///   sig = oldIdentityKey.sign(newIdentityKeyPublic + newMasterKeyPublic)
+  ///
+  /// La firma permette ai contatti di verificare che la rotazione è autentica
+  /// (il vecchio proprietario ha autorizzato il passaggio alla nuova chiave).
+  ///
+  /// Restituisce (newKeys, transitionSig) dove transitionSig è base64.
+  Future<(CryptoKeys, String)> rotateIdentityKey(CryptoKeys existing) async {
+    // Genera nuova identity key Ed25519
+    final newIkKp = await Ed25519().newKeyPair();
+    final newIkPriv = await newIkKp.extractPrivateKeyBytes();
+    final newIkPub = await newIkKp.extractPublicKey();
+
+    // Genera nuova master key X25519
+    final newMkKp = await X25519().newKeyPair();
+    final newMkPriv = await newMkKp.extractPrivateKeyBytes();
+    final newMkPub = await newMkKp.extractPublicKey();
+
+    // Firma di transizione: old_ik firma (new_ik_pub || new_mk_pub)
+    final oldIkKp = await reconstructEd25519KeyPair(
+      privateBase64: existing.identityKeyPrivate,
+      publicBase64: existing.identityKeyPublic,
+    );
+    final payload = Uint8List.fromList(newIkPub.bytes + newMkPub.bytes);
+    final sigBytes = await signData(oldIkKp, payload);
+
+    // Genera nuova SPK firmata con la nuova identity key
+    final newSpk = await X25519().newKeyPair();
+    final newSpkPriv = await newSpk.extractPrivateKeyBytes();
+    final newSpkPub = (await newSpk.extractPublicKey()).bytes;
+    final spkSig = await signData(newIkKp, Uint8List.fromList(newSpkPub));
+
+    final newKeys = CryptoKeys(
+      masterKeyPrivate: base64Encode(Uint8List.fromList(newMkPriv)),
+      masterKeyPublic: base64Encode(newMkPub.bytes),
+      identityKeyPrivate: base64Encode(Uint8List.fromList(newIkPriv)),
+      identityKeyPublic: base64Encode(newIkPub.bytes),
+      signedPreKeyPrivate: base64Encode(Uint8List.fromList(newSpkPriv)),
+      signedPreKeyPublic: base64Encode(newSpkPub),
+      signedPreKeySignature: base64Encode(spkSig),
+      signedPreKeyCreatedAt: DateTime.now(),
+    );
+
+    return (newKeys, base64Encode(sigBytes));
+  }
+
+  /// Verifica una firma di transizione identity key.
+  ///
+  /// [oldIdentityKeyBase64] = vecchia identity key Ed25519 del contatto (conosciuta)
+  /// [newIdentityKeyBase64] = nuova identity key proposta
+  /// [newMasterKeyBase64]   = nuova master key proposta
+  /// [signatureBase64]      = firma della transizione
+  Future<bool> verifyKeyRotation({
+    required String oldIdentityKeyBase64,
+    required String newIdentityKeyBase64,
+    required String newMasterKeyBase64,
+    required String signatureBase64,
+  }) async {
+    try {
+      final newIkBytes = base64Decode(newIdentityKeyBase64);
+      final newMkBytes = base64Decode(newMasterKeyBase64);
+      final payload = Uint8List.fromList(newIkBytes + newMkBytes);
+      return await verifySignature(
+        identityPublicKeyBase64: oldIdentityKeyBase64,
+        dataBase64: base64Encode(payload),
+        signatureBase64: signatureBase64,
+      );
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Genera una nuova Signed Pre-Key X25519, la firma con la identity key Ed25519
   /// e restituisce CryptoKeys aggiornato con nuova SPK e timestamp corrente.
   Future<CryptoKeys> rotateSignedPreKey(CryptoKeys existing) async {

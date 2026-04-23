@@ -44,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   // Privacy
   bool _screenshotPrevention = true;
   int  _autoLockMinutes      = 5;
-  int  _msgExpiryDays        = 0;
+  int  _msgExpiryHours       = 0;
 
   // ignore: unused_field
   StreamSubscription<RelayStatus>? _relaySubscription;
@@ -87,12 +87,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _loadPrivacySettings() async {
     final screenshot = await _securitySettingsService.getScreenshotPrevention();
     final autoLock   = await _securitySettingsService.getAutoLockMinutes();
-    final expiry     = await _securitySettingsService.getMessageExpirationDays();
+    final expiry     = await _securitySettingsService.getMessageExpirationHours();
     if (!mounted) return;
     setState(() {
       _screenshotPrevention = screenshot;
       _autoLockMinutes      = autoLock;
-      _msgExpiryDays        = expiry;
+      _msgExpiryHours       = expiry;
     });
   }
 
@@ -166,9 +166,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (mounted) setState(() => _autoLockMinutes = minutes);
   }
 
-  Future<void> _setMsgExpiry(int days) async {
-    await _securitySettingsService.setMessageExpirationDays(days);
-    if (mounted) setState(() => _msgExpiryDays = days);
+  Future<void> _setMsgExpiry(int hours) async {
+    await _securitySettingsService.setMessageExpirationHours(hours);
+    if (mounted) setState(() => _msgExpiryHours = hours);
   }
 
   // ── Panic wipe ────────────────────────────────────────────────────────────
@@ -620,14 +620,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           child: _optionChips<int>(
-            options: const [0, 1, 7, 30, 90],
-            selected: _msgExpiryDays,
-            label: (v) => v == 0 ? 'Mai' : v == 1 ? '1 giorno' : '$v giorni',
+            options: const [0, 1, 6, 12, 24, 168, 720],
+            selected: _msgExpiryHours,
+            label: (v) {
+              if (v == 0)   return 'Mai';
+              if (v == 1)   return '1 ora';
+              if (v < 24)   return '${v}h';
+              if (v == 24)  return '1 giorno';
+              if (v == 168) return '7 giorni';
+              if (v == 720) return '30 giorni';
+              return '${v ~/ 24}g';
+            },
             onSelected: _setMsgExpiry,
             activeColor: AppConstants.warning,
           ),
         ),
-        _infoHint('I messaggi più vecchi della soglia vengono eliminati definitivamente al prossimo avvio. '
+        _infoHint('I messaggi più vecchi della soglia vengono eliminati definitivamente al login e all\'avvio. '
             'Nessun recupero possibile.'),
       ]),
     );

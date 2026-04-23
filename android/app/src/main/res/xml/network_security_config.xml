@@ -1,32 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    INVISIBLE — Network Security Config
-    =====================================
+    INVISIBLE - Network Security Config
+
     Questo file viene letto da Android per applicare policy TLS a livello OS.
-    Nessuna connessione HTTP in chiaro è permessa (cleartext = false).
+    Nessuna connessione HTTP in chiaro e permessa (cleartext = false).
 
     CERTIFICATE PINNING (attivare dopo il deploy del server):
-    ──────────────────────────────────────────────────────────
     1. Ottenere il pin SPKI SHA-256 del server:
-       openssl s_client -connect TUODOMINIO.com:443 </dev/null 2>/dev/null \
-         | openssl x509 -pubkey -noout \
-         | openssl pkey -pubin -outform der \
-         | openssl dgst -sha256 -binary \
+       openssl s_client -connect TUODOMINIO.com:443
+         | openssl x509 -pubkey -noout
+         | openssl pkey -pubin -outform der
+         | openssl dgst -sha256 -binary
          | openssl enc -base64
 
-    2. Generare un pin di backup (Let's Encrypt cross-sign):
-       openssl s_client -connect TUODOMINIO.com:443 </dev/null 2>/dev/null \
-         | openssl x509 -issuer -noout
-
-    3. Decommentare il blocco <domain-config> qui sotto e inserire i pin.
-    4. Aggiornare la data di expiration prima della scadenza del cert.
+    2. Decommentare il blocco domain-config qui sotto e inserire i pin.
+    3. Aggiornare la data di expiration prima della scadenza del cert.
 -->
 <network-security-config>
 
-    <!-- Blocca HTTP in chiaro su tutti i domini — solo HTTPS permesso -->
+    <!-- Blocca HTTP in chiaro su tutti i domini - solo HTTPS permesso -->
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors>
-            <!-- Solo CA di sistema — NO CA installate dall'utente (blocca Burp/Charles) -->
+            <!-- Solo CA di sistema - NO CA installate dall'utente (blocca Burp/Charles) -->
             <certificates src="system"/>
         </trust-anchors>
     </base-config>

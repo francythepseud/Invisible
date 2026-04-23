@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:sqflite_sqlcipher/sqflite.dart';
 import 'package:invisible/core/crypto/crypto_service.dart';
@@ -115,6 +117,9 @@ class ProfileService {
     _currentProfile = profile;
     _currentDatabase = database;
 
+    // Genera il pool iniziale di One-Time PreKeys per X3DH
+    await generateOneTimePreKeys(count: 50);
+
     return profile;
   }
 
@@ -172,6 +177,12 @@ class ProfileService {
       // Imposta come profilo corrente
       _currentProfile = updatedProfile;
       _currentDatabase = database;
+
+      // Rigenera OPK se il pool è esaurito o quasi (< 20)
+      final opkCount = await countUnusedOPKs();
+      if (opkCount < _opkMinCount) {
+        await generateOneTimePreKeys(count: 50);
+      }
 
       return updatedProfile;
     } catch (e) {
@@ -290,6 +301,86 @@ class ProfileService {
       return dbValue;
     }
     return null;
+  }
+
+  // ── Identity Key Rotation ─────────────────────────────────────────────────
+
+  /// Ruota la identity key Ed25519 e la master key X25519.
+  ///
+  /// Genera nuove chiavi, crea la firma di transizione (old_ik firma new_ik + new_mk),
+  /// salva le nuove chiavi nel TEE e nel DB.
+  ///
+  /// Restituisce (newKeys, transitionSig) per permettere al chiamante di
+  /// broadcastare la rotazione ai contatti prima di disconnettersi dal relay.
+  Future<(CryptoKeys, String)> rotateIdentityKey() async {
+    final existing = await getCurrentCryptoKeys();
+    if (existing == null) throw Exception('Nessuna chiave corrente');
+
+    final (newKeys, sig) = await _cryptoService.rotateIdentityKey(existing);
+    await saveCryptoKeys(newKeys);
+    return (newKeys, sig);
+  }
+
+  // ── One-Time PreKeys (OPK) ────────────────────────────────────────────────
+
+  static const _opkMinCount = 20; // rigenera se rimangono meno di N OPK
+
+  /// Genera [count] One-Time PreKey X25519 e le salva nella tabella `prekeys`.
+  /// Le chiavi private sono nel DB SQLCipher (AES-256 + PBKDF2 100k).
+  Future<void> generateOneTimePreKeys({int count = 50}) async {
+    if (_currentDatabase == null) return;
+    final x25519 = X25519();
+    final now = DateTime.now().millisecondsSinceEpoch;
+    for (int i = 0; i < count; i++) {
+      final kp = await x25519.newKeyPair();
+      final pub  = base64Encode((await kp.extractPublicKey()).bytes);
+      final priv = base64Encode(Uint8List.fromList(await kp.extractPrivateKeyBytes()));
+      await _currentDatabase!.insert('prekeys', {
+        'public_key': pub, 'private_key': priv,
+        'used': 0, 'created_at': now,
+      });
+    }
+  }
+
+  /// Restituisce la prossima OPK inutilizzata {id, public_key, private_key}.
+  /// Rigenera automaticamente se il pool è quasi esaurito.
+  Future<Map<String, dynamic>?> getNextUnusedOPK() async {
+    if (_currentDatabase == null) return null;
+    final remaining = await countUnusedOPKs();
+    if (remaining < _opkMinCount) {
+      await generateOneTimePreKeys(count: 50);
+    }
+    final rows = await _currentDatabase!.query(
+      'prekeys', where: 'used = 0', orderBy: 'id ASC', limit: 1,
+    );
+    return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
+  }
+
+  /// Conteggio OPK inutilizzate.
+  Future<int> countUnusedOPKs() async {
+    if (_currentDatabase == null) return 0;
+    final r = await _currentDatabase!.rawQuery(
+      'SELECT COUNT(*) as c FROM prekeys WHERE used = 0',
+    );
+    return (r.first['c'] as int?) ?? 0;
+  }
+
+  /// Marca una OPK come usata (viene scartata — usa-e-getta).
+  Future<void> markOPKUsed(int opkId) async {
+    if (_currentDatabase == null) return;
+    await _currentDatabase!.update(
+      'prekeys', {'used': 1},
+      where: 'id = ?', whereArgs: [opkId],
+    );
+  }
+
+  /// Ottiene una OPK per ID (serve al receiver per completare X3DH).
+  Future<Map<String, dynamic>?> getOPKById(int opkId) async {
+    if (_currentDatabase == null) return null;
+    final rows = await _currentDatabase!.query(
+      'prekeys', where: 'id = ?', whereArgs: [opkId], limit: 1,
+    );
+    return rows.isEmpty ? null : Map<String, dynamic>.from(rows.first);
   }
 
   /// Aggiorna le chiavi crittografiche del profilo corrente (es. dopo rotazione SPK).

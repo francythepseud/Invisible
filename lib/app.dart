@@ -43,9 +43,9 @@ class _InvisibleAppState extends State<InvisibleApp> with WidgetsBindingObserver
 
     // Elimina messaggi scaduti
     try {
-      final expiryDays = await settings.getMessageExpirationDays();
-      if (expiryDays > 0) {
-        await MessageService().deleteExpiredMessages(expiryDays);
+      final expiryHours = await settings.getMessageExpirationHours();
+      if (expiryHours > 0) {
+        await MessageService().deleteExpiredMessages(expiryHours);
       }
     } catch (_) {}
   }
@@ -56,6 +56,9 @@ class _InvisibleAppState extends State<InvisibleApp> with WidgetsBindingObserver
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
       _pausedAt = DateTime.now();
+      // Svuota la cache plaintext in RAM quando l'app va in background.
+      // I testi decriptati non rimangono in memoria mentre il processo è sospeso.
+      MessageService().clearPlaintextCache();
     } else if (state == AppLifecycleState.resumed) {
       _checkAutoLock();
     }

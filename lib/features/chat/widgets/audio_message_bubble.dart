@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:flutter/material.dart';
 import 'package:invisible/utils/constants.dart';
 
@@ -35,14 +35,16 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
   void _initPlayer() {
     try {
       _player = AudioPlayer();
-      _player!.onDurationChanged.listen((d) {
-        if (mounted && !_disposed) setState(() => _duration = d);
+      _player!.durationStream.listen((d) {
+        if (mounted && !_disposed) setState(() => _duration = d ?? Duration.zero);
       });
-      _player!.onPositionChanged.listen((pos) {
+      _player!.positionStream.listen((pos) {
         if (mounted && !_disposed) setState(() => _position = pos);
       });
-      _player!.onPlayerComplete.listen((_) {
-        if (mounted && !_disposed) setState(() { _isPlaying = false; _position = Duration.zero; });
+      _player!.playerStateStream.listen((state) {
+        if (mounted && !_disposed && state.processingState == ProcessingState.completed) {
+          setState(() { _isPlaying = false; _position = Duration.zero; });
+        }
       });
       _preload();
     } catch (e) {
@@ -54,7 +56,7 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
     if (_disposed || _player == null) return;
     try {
       if (File(widget.localPath).existsSync()) {
-        await _player!.setSource(DeviceFileSource(widget.localPath));
+        await _player!.setFilePath(widget.localPath);
       }
     } catch (e) {
       debugPrint('[AUDIO] preload error: $e');
@@ -82,7 +84,11 @@ class _AudioMessageBubbleState extends State<AudioMessageBubble> {
         if (_duration > Duration.zero && _position >= _duration) {
           await _player!.seek(Duration.zero);
         }
-        await _player!.play(DeviceFileSource(widget.localPath));
+        if (_player!.processingState == ProcessingState.idle ||
+            _player!.processingState == ProcessingState.completed) {
+          await _player!.setFilePath(widget.localPath);
+        }
+        await _player!.play();
         if (mounted) setState(() => _isPlaying = true);
       }
     } catch (e) {

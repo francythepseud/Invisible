@@ -14,7 +14,7 @@ class SecuritySettingsService {
 
   static const _keyScreenshot = 'sec_screenshot_prevention';
   static const _keyAutoLock   = 'sec_auto_lock_minutes';
-  static const _keyMsgExpiry  = 'sec_msg_expiry_days';
+  static const _keyMsgExpiry  = 'sec_msg_expiry_hours';
 
   static const _securityChannel = MethodChannel('com.invisible.invisible/security');
 
@@ -55,13 +55,14 @@ class SecuritySettingsService {
 
   // ── Message Expiration ───────────────────────────────────────────────────
 
-  Future<int> getMessageExpirationDays() async {
+  /// Restituisce la soglia di scadenza in ore (0 = mai).
+  Future<int> getMessageExpirationHours() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getInt(_keyMsgExpiry) ?? 0;
   }
 
-  Future<void> setMessageExpirationDays(int days) async {
+  Future<void> setMessageExpirationHours(int hours) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setInt(_keyMsgExpiry, days);
+    await prefs.setInt(_keyMsgExpiry, hours);
   }
 }

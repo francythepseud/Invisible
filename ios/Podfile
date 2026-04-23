@@ -47,6 +47,10 @@ post_install do |installer|
       config.build_settings['FRAMEWORK_SEARCH_PATHS'] << '$(BUILT_PRODUCTS_DIR)'
       config.build_settings['HEADER_SEARCH_PATHS'] ||= ['$(inherited)']
       config.build_settings['HEADER_SEARCH_PATHS'] << '$(PODS_ROOT)/Headers/Public/Flutter'
+      # Fix libwebp "double-quoted include in framework header" su Xcode 16+ / iOS 26
+      if target.name == 'libwebp'
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
     end
   end
 end

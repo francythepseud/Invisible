@@ -348,6 +348,55 @@ func (s *Server) handleListErrors(w http.ResponseWriter, r *http.Request) {
 	jsonResp(w, logs)
 }
 
+// DELETE /admin/api/errors — cancella tutti i log errori
+func (s *Server) handleClearErrors(w http.ResponseWriter, r *http.Request) {
+	res, err := s.db.Exec(`DELETE FROM error_logs`)
+	if err != nil {
+		http.Error(w, err.Error(), 500)
+		return
+	}
+	n, _ := res.RowsAffected()
+	log.Printf("[ADMIN] Cancellati %d log errori", n)
+	jsonResp(w, map[string]any{"ok": true, "deleted": n})
+}
+
+// DELETE /v1/account — auto-cancellazione account dall'app (firmata con identity key)
+// Body: {"identity_key":"...","signature":"..."}
+// La firma è su "invisible_delete_account" per prevenire replay
+func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		IdentityKey string `json:"identity_key"`
+		Signature   string `json:"signature"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IdentityKey == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	pubBytes, err := base64.StdEncoding.DecodeString(req.IdentityKey)
+	if err != nil || len(pubBytes) != ed25519.PublicKeySize {
+		http.Error(w, "invalid identity key", http.StatusBadRequest)
+		return
+	}
+	sigBytes, err := base64.StdEncoding.DecodeString(req.Signature)
+	if err != nil {
+		http.Error(w, "invalid signature", http.StatusBadRequest)
+		return
+	}
+	if !ed25519.Verify(pubBytes, []byte("invisible_delete_account"), sigBytes) {
+		http.Error(w, "firma non valida", http.StatusUnauthorized)
+		return
+	}
+	hash := shortHash(req.IdentityKey)
+	s.db.Exec(`DELETE FROM whitelist WHERE identity_hash=$1`, hash)
+	s.db.Exec(`DELETE FROM error_logs WHERE identity_hash=$1`, hash)
+	log.Printf("[ADMIN] Account eliminato su richiesta utente: %s", hash[:8])
+	w.WriteHeader(http.StatusOK)
+}
+
 // ── ToS / GDPR acceptance (pubblico, dall'app) ───────────────────────────────
 
 // POST /v1/tos/accept
@@ -493,11 +542,21 @@ func main() {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		}
 	}))
-	mux.HandleFunc("/admin/api/errors", srv.requireToken(srv.handleListErrors))
+	mux.HandleFunc("/admin/api/errors", srv.requireToken(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			srv.handleListErrors(w, r)
+		case http.MethodDelete:
+			srv.handleClearErrors(w, r)
+		default:
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+	}))
 
 	// Endpoint pubblici dall'app
 	mux.HandleFunc("/v1/errors", srv.handleReceiveError)
 	mux.HandleFunc("/v1/tos/accept", srv.handleTosAccept)
+	mux.HandleFunc("/v1/account", srv.handleDeleteAccount)
 
 	// Endpoint interni (non esposti via nginx)
 	mux.HandleFunc("/internal/whitelist/", srv.handleCheckWhitelist)

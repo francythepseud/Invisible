@@ -69,9 +69,10 @@ dependencies:
   # Notifiche locali (no FCM, nessun dato a Google)
   flutter_local_notifications: ^17.2.4
 
-  # Audio — messaggi vocali
+  # Audio — messaggi vocali e ringtone
   record: ^5.1.2
-  audioplayers: ^6.0.0
+  just_audio: ^0.9.40
+  audio_session: ^0.1.21
 
   # Video
   video_player: ^2.9.2

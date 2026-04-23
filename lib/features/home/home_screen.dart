@@ -4,6 +4,8 @@ import 'package:invisible/core/network/invisible_client.dart';
 import 'package:invisible/core/network/mesh_vpn_service.dart';
 import 'package:invisible/core/services/call_log_service.dart';
 import 'package:invisible/core/services/call_service.dart';
+import 'package:invisible/core/services/message_service.dart';
+import 'package:invisible/core/services/security_settings_service.dart';
 import 'package:invisible/core/services/session_service.dart';
 import 'package:invisible/utils/constants.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -37,6 +39,7 @@ class _HomeScreenState extends State<HomeScreen> {
     SessionService().startSession();
     CallService().startListening();
     _incomingCallSub = CallService().incomingCallStream.listen(_onIncomingCall);
+    _deleteExpiredMessagesOnLogin();
     _notAuthorizedSub = InvisibleClient().notAuthorizedStream.listen((_) => _onNotAuthorized());
     _meshNotAuthorizedSub = MeshVpnService().notAuthorizedStream.listen((_) => _onNotAuthorized());
     // Connette mesh VPN e richiede permessi audio/video dopo che la schermata è visibile
@@ -52,6 +55,14 @@ class _HomeScreenState extends State<HomeScreen> {
       MaterialPageRoute(builder: (_) => const NotActivatedScreen()),
       (_) => false,
     );
+  }
+
+  /// Cancella i messaggi scaduti al login (in aggiunta alla pulizia all'avvio dell'app).
+  Future<void> _deleteExpiredMessagesOnLogin() async {
+    try {
+      final hours = await SecuritySettingsService().getMessageExpirationHours();
+      if (hours > 0) await MessageService().deleteExpiredMessages(hours);
+    } catch (_) {}
   }
 
   /// Richiede microfono (e camera) al primo avvio — così iOS mostra il dialogo

@@ -17,6 +17,10 @@ class RatchetStateModel extends Equatable {
   final int receiveCount;
   final int previousSendCount;
   final DateTime updatedAt;
+  /// Chiave pubblica effimera X3DH del mittente (base64) — null dopo il primo scambio DH
+  final String? x3dhEphemeralPub;
+  /// ID della OPK usata nell'handshake X3DH — null se non era presente
+  final int? x3dhOpkId;
 
   const RatchetStateModel({
     required this.id,
@@ -31,22 +35,17 @@ class RatchetStateModel extends Equatable {
     required this.receiveCount,
     required this.previousSendCount,
     required this.updatedAt,
+    this.x3dhEphemeralPub,
+    this.x3dhOpkId,
   });
 
   @override
   List<Object?> get props => [
-        id,
-        conversationId,
-        rootKey,
-        sendingChainKey,
-        receivingChainKey,
-        ourRatchetPrivateKey,
-        ourRatchetPublicKey,
-        theirRatchetPublicKey,
-        sendCount,
-        receiveCount,
-        previousSendCount,
-        updatedAt,
+        id, conversationId, rootKey,
+        sendingChainKey, receivingChainKey,
+        ourRatchetPrivateKey, ourRatchetPublicKey, theirRatchetPublicKey,
+        sendCount, receiveCount, previousSendCount, updatedAt,
+        x3dhEphemeralPub, x3dhOpkId,
       ];
 
   /// Crea RatchetStateModel da database row
@@ -64,6 +63,8 @@ class RatchetStateModel extends Equatable {
       receiveCount: map['receive_count'] as int,
       previousSendCount: map['previous_send_count'] as int,
       updatedAt: DateTime.parse(map['updated_at'] as String),
+      x3dhEphemeralPub: map['x3dh_ephemeral_pub'] as String?,
+      x3dhOpkId: map['x3dh_opk_id'] as int?,
     );
   }
 
@@ -82,6 +83,8 @@ class RatchetStateModel extends Equatable {
       'receive_count': receiveCount,
       'previous_send_count': previousSendCount,
       'updated_at': updatedAt.toIso8601String(),
+      'x3dh_ephemeral_pub': x3dhEphemeralPub,
+      'x3dh_opk_id': x3dhOpkId,
     };
   }
 

@@ -2,8 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:invisible/core/network/invisible_client.dart';
+import 'package:invisible/core/services/panic_service.dart';
 import 'package:invisible/core/services/profile_service.dart';
 import 'package:invisible/core/services/session_service.dart';
+import 'package:invisible/features/auth/screens/welcome_screen.dart';
 import 'package:invisible/features/home/home_screen.dart';
 import 'package:invisible/features/auth/screens/login_screen.dart';
 import 'package:invisible/utils/constants.dart';
@@ -78,15 +80,11 @@ class _NotActivatedScreenState extends State<NotActivatedScreen> {
       ),
     );
     if (confirm != true || !mounted) return;
-    try {
-      await SessionService().endSession();
-    } catch (_) {}
-    try {
-      await ProfileService().deleteCurrentProfile();
-    } catch (_) {}
+    try { await SessionService().endSession(); } catch (_) {}
+    await PanicService().wipeAll();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
       (_) => false,
     );
   }

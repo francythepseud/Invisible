@@ -30,18 +30,23 @@ class _QRCodeScreenState extends State<QRCodeScreen> {
       setState(() => _loading = false);
       return;
     }
-    // Payload QR: chiavi pubbliche per X3DH + firma SPK
-    // v   = versione protocollo
-    // mk  = master key X25519 (DH identity key)
-    // ik  = identity key Ed25519 (firma/auth)
-    // spk = signed pre-key X25519 (chiave DH separata per X3DH)
-    // sig = firma Ed25519 della spk (prova di proprietà)
+    // Payload QR v2: chiavi pubbliche per X3DH + firma SPK + OPK
+    // v    = versione protocollo
+    // mk   = master key X25519 (DH identity key)
+    // ik   = identity key Ed25519 (firma/auth)
+    // spk  = signed pre-key X25519 (chiave DH separata per X3DH)
+    // sig  = firma Ed25519 della spk (prova di proprietà)
+    // opk  = one-time pre-key X25519 (usa-e-getta per X3DH)
+    // opki = ID numerico della OPK (usato dal receiver per scartarla)
+    final opk = await _profileService.getNextUnusedOPK();
     final payload = jsonEncode({
-      'v': 1,
+      'v': 2,
       'mk': keys.masterKeyPublic,
       'ik': keys.identityKeyPublic,
       'spk': keys.signedPreKeyPublic,
       'sig': keys.signedPreKeySignature,
+      if (opk != null) 'opk': opk['public_key'] as String,
+      if (opk != null) 'opki': opk['id'] as int,
     });
     setState(() {
       _qrData = payload;

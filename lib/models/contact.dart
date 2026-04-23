@@ -11,6 +11,10 @@ class Contact extends Equatable {
   final String? signedPreKey;
   /// Firma Ed25519 della signedPreKey — verifica che appartenga a questo contatto
   final String? signedPreKeySig;
+  /// One-Time PreKey X25519 del contatto (usa-e-getta per X3DH)
+  final String? opkPub;
+  /// ID numerico della OPK — serve al receiver per scartarla dopo l'uso
+  final int? opkId;
   final String? avatarPath;
   final bool blocked;
   final DateTime createdAt;
@@ -23,6 +27,8 @@ class Contact extends Equatable {
     this.identityKey,
     this.signedPreKey,
     this.signedPreKeySig,
+    this.opkPub,
+    this.opkId,
     this.avatarPath,
     this.blocked = false,
     required this.createdAt,
@@ -36,6 +42,8 @@ class Contact extends Equatable {
     String? identityKey,
     String? signedPreKey,
     String? signedPreKeySig,
+    String? opkPub,
+    int? opkId,
     String? avatarPath,
     bool? blocked,
     DateTime? createdAt,
@@ -48,6 +56,8 @@ class Contact extends Equatable {
       identityKey: identityKey ?? this.identityKey,
       signedPreKey: signedPreKey ?? this.signedPreKey,
       signedPreKeySig: signedPreKeySig ?? this.signedPreKeySig,
+      opkPub: opkPub ?? this.opkPub,
+      opkId: opkId ?? this.opkId,
       avatarPath: avatarPath ?? this.avatarPath,
       blocked: blocked ?? this.blocked,
       createdAt: createdAt ?? this.createdAt,
@@ -63,6 +73,8 @@ class Contact extends Equatable {
       'identity_key': identityKey,
       'signed_pre_key': signedPreKey,
       'signed_pre_key_sig': signedPreKeySig,
+      'opk_pub': opkPub,
+      'opk_id': opkId,
       'avatar_path': avatarPath,
       'blocked': blocked ? 1 : 0,
       'created_at': createdAt.millisecondsSinceEpoch,
@@ -78,6 +90,8 @@ class Contact extends Equatable {
       identityKey: json['identity_key'] as String?,
       signedPreKey: json['signed_pre_key'] as String?,
       signedPreKeySig: json['signed_pre_key_sig'] as String?,
+      opkPub: json['opk_pub'] as String?,
+      opkId: json['opk_id'] as int?,
       avatarPath: json['avatar_path'] as String?,
       blocked: (json['blocked'] as int) == 1,
       createdAt: DateTime.fromMillisecondsSinceEpoch(json['created_at'] as int),
@@ -93,6 +107,8 @@ class Contact extends Equatable {
         identityKey,
         signedPreKey,
         signedPreKeySig,
+        opkPub,
+        opkId,
         blocked,
         createdAt,
         updatedAt,

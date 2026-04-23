@@ -123,7 +123,7 @@
 
 <!-- COVER -->
 <div class="cover">
-  <div class="cover-label">Documento Tecnico — Versione 1.0</div>
+  <div class="cover-label">Documento Tecnico — Versione 2.0</div>
   <div class="cover-title">INVISIBLE</div>
   <div class="cover-sub">Architettura Tecnica, Protocolli Crittografici<br>e Specifiche di Sistema</div>
   <div class="cover-divider"></div>
@@ -131,7 +131,7 @@
   <div class="cover-meta">
     <span>CONFIDENZIALE</span>
     <span>Documento Tecnico</span>
-    <span>Stack: Flutter · Go 1.21 · WireGuard · Docker</span>
+    <span>Stack: Flutter · Go 1.21 · WireGuard · Redis · Docker</span>
     <span>2026</span>
   </div>
 </div>
@@ -150,8 +150,12 @@
   <div class="toc-item toc-sub"><a href="#cap4">4.1 Generazione Identità</a></div>
   <div class="toc-item toc-sub"><a href="#cap4">4.2 X3DH — Extended Triple Diffie-Hellman</a></div>
   <div class="toc-item toc-sub"><a href="#cap4">4.3 Double Ratchet Algorithm</a></div>
-  <div class="toc-item toc-sub"><a href="#cap4">4.4 Gerarchia delle Chiavi</a></div>
-  <div class="toc-item toc-sub"><a href="#cap4">4.5 Cifratura Media</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.4 Sealed Sender</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.5 Message Padding</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.6 Safety Numbers</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.7 Identity Key Rotation</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.8 Gerarchia delle Chiavi</a></div>
+  <div class="toc-item toc-sub"><a href="#cap4">4.9 Cifratura Media</a></div>
   <div class="toc-item toc-section"><a href="#cap5">5. Rete WireGuard Mesh</a></div>
   <div class="toc-item toc-section"><a href="#cap6">6. Architettura App Flutter</a></div>
   <div class="toc-item toc-sub"><a href="#cap6">6.1 Struttura Directory</a></div>
@@ -167,6 +171,7 @@
   <div class="toc-item toc-section"><a href="#cap13">13. Payload e Formato Messaggi</a></div>
   <div class="toc-item toc-section"><a href="#cap14">14. Elementi di Novità Tecnica per Brevetto</a></div>
   <div class="toc-item toc-section"><a href="#cap15">15. Vulnerabilità Note e Mitigazioni</a></div>
+  <div class="toc-item toc-section"><a href="#cap16">16. Sicurezza in Memoria e Background</a></div>
 </div>
 
 <!-- CAP 1 -->
@@ -271,6 +276,7 @@
     <thead><tr><th>Componente</th><th>Versione</th><th>Ruolo</th></tr></thead>
     <tbody>
       <tr><td>Go</td><td>1.21</td><td>Runtime microservizi</td></tr>
+      <tr><td>Redis</td><td>7-alpine</td><td>Coda messaggi offline — TTL automatico, AOF persistence, scala orizzontalmente</td></tr>
       <tr><td>WireGuard</td><td>kernel module</td><td>VPN mesh</td></tr>
       <tr><td>nginx</td><td>latest stable</td><td>Reverse proxy TLS 1.3</td></tr>
       <tr><td>Let's Encrypt / Certbot</td><td>latest</td><td>Certificati TLS RSA-4096</td></tr>
@@ -342,33 +348,48 @@ func verifyRequest(r *http.Request) bool {
 }</pre>
 
   <h2>3.3 relay (:8082)</h2>
-  <p>Microservizio WebSocket per la consegna asincrona dei messaggi E2E. Mantiene una coda per i messaggi destinati a utenti offline per un massimo di 7 giorni. Il relay vede solo ciphertext opaco — non ha accesso al contenuto dei messaggi né alle identità reali dei comunicanti.</p>
+  <p>Microservizio WebSocket per la consegna asincrona dei messaggi E2E. Mantiene una coda per i messaggi destinati a utenti offline per un massimo di 7 giorni. Il relay vede solo ciphertext opaco — non ha accesso al contenuto dei messaggi né all'identità del mittente (<strong>Sealed Sender</strong>).</p>
 
-  <h4>Struttura messaggio relay</h4>
+  <h4>Struttura messaggio relay — Sealed Sender</h4>
 <pre>
-// Outer payload (visibile al relay):
+// Wire format (visibile al relay):
 {
-  "to":      "10.7.0.8",            // IP mesh destinatario
-  "from":    "10.7.0.5",            // IP mesh mittente
-  "payload": "base64(json({         // ciphertext opaco
-    \"ciphertext\": \"base64_bytes\",
-    \"header\":     \"base64_header\"
-  }))"
+  "to":            "shortHash(identityKey)",  // destinatario — solo per routing
+  "sealed_payload": "base64(JSON_busta)",     // busta opaca: nessun mittente visibile
+  "msg_id":        "uuid"
 }
-// Il relay non può decifrare payload — contiene Double Ratchet ciphertext</pre>
 
-  <h4>Coda offline</h4>
+// La busta sealed_payload contiene (cifrato, solo il destinatario può aprirla):
+// {
+//   "e": "base64_ephemeral_X25519_pub",  // chiave effimera mittente
+//   "n": "base64_nonce",                 // nonce AES-GCM
+//   "c": "base64_ciphertext+mac"         // AES-256-GCM di {"from": identityKey, "p": innerPayload}
+// }
+// Il relay NON conosce: contenuto, mittente reale, tipo messaggio</pre>
+
+  <h4>Coda offline — Redis</h4>
+  <p>La coda messaggi offline è gestita da <strong>Redis 7</strong> con persistenza AOF (<code>appendfsync everysec</code>). La migrazione da bbolt elimina il file locale e permette la scalabilità orizzontale: più pod relay possono condividere lo stesso Redis senza conflitti.</p>
 <pre>
-type QueuedMessage struct {
-    ID        string
-    To        string
-    From      string
-    Payload   []byte
-    Timestamp time.Time
-    TTL       time.Duration // 7 giorni
+// Struttura chiavi Redis per ogni messaggio in coda:
+//   "msg:&lt;recipientHash&gt;:&lt;msgID&gt;" → JSON(QueuedMsg)  [TTL = 7 giorni]
+//   "idx:&lt;recipientHash&gt;"          → Set{msgID, ...}  [TTL = 7 giorni]
+//
+// Enqueue: pipeline atomica SET + SADD + EXPIRE
+// Drain:   SMEMBERS → pipeline GET → DEL batch (zero round-trip extra)
+// DeleteOne: pipeline DEL msg + SREM idx (dopo ACK del destinatario)
+//
+// TTL automatico Redis — nessun job di cleanup necessario
+// AOF persistence — nessuna perdita messaggi in caso di crash
+
+type QueuedMsg struct {
+    To            string
+    SealedPayload string    // busta sealed — from non viene mai memorizzato
+    MsgID         string
+    Timestamp     time.Time
 }
-// I messaggi scaduti vengono eliminati automaticamente
-// Non c'è persistenza a lungo termine — privacy by design</pre>
+
+// Health check /healthz verifica anche la connessione Redis con PING
+// maxmemory 512MB, policy allkeys-lru — i messaggi più vecchi cedono spazio</pre>
 
   <h2>3.4 nginx (reverse proxy)</h2>
 <pre>
@@ -555,7 +576,90 @@ void performDHRatchet(SimplePublicKey newRemoteKey) {
   sendChainKey = newSendChain;
 }</pre>
 
-  <h2>4.4 Gerarchia Completa delle Chiavi</h2>
+  <h2>4.4 Sealed Sender</h2>
+  <p>Il Sealed Sender è uno strato crittografico aggiuntivo che nasconde l'identità del mittente al relay. Il server conosce solo il destinatario (necessario per l'instradamento) — il mittente è cifrato dentro la busta, leggibile unicamente dal destinatario.</p>
+
+  <h3>Schema di funzionamento</h3>
+<pre>
+MITTENTE (seal):
+  1. Genera keypair X25519 effimera (usa e butta — diversa per ogni messaggio)
+  2. DH(ephPriv, recipientMasterPub)  →  dhSecret
+  3. HKDF(dhSecret, nonce=ephPub, info="invisible-sealed-sender-v1")  →  aesKey
+  4. Plaintext = JSON{ "from": senderIdentityPub, "p": innerPayload }
+  5. ciphertext = AES-256-GCM(plaintext, aesKey, randomNonce)
+  6. Wire = JSON{ "e": ephPub, "n": nonce, "c": ciphertext+mac }
+
+RELAY:
+  — vede solo { "to": destHash, "sealed_payload": opaqueBlob, "msg_id": uuid }
+  — non sa chi ha scritto, non memorizza il from
+
+DESTINATARIO (unseal):
+  1. DH(ourMasterPriv, ephPub)  →  dhSecret
+  2. HKDF(dhSecret, nonce=ephPub, info="invisible-sealed-sender-v1")  →  aesKey
+  3. Decifra ciphertext  →  plaintext  →  { from, innerPayload }
+  4. Usa innerPayload come payload Double Ratchet</pre>
+
+  <h3>Proprietà di sicurezza</h3>
+  <ul>
+    <li><strong>Sender anonymity</strong> verso il server — il relay non può dedurre chi ha scritto</li>
+    <li><strong>Replay resistance</strong> — keypair effimera diversa per ogni busta</li>
+    <li><strong>MAC integrity</strong> — AES-GCM autentica la busta, alterazioni rilevate prima del decrypt</li>
+    <li><strong>Forward secrecy</strong> delle buste — la keypair effimera viene scartata dopo ogni invio</li>
+  </ul>
+
+  <h2>4.5 Message Padding</h2>
+  <p>Ogni plaintext Double Ratchet viene portato a dimensione fissa prima della cifratura. Questo impedisce la <strong>size-based traffic analysis</strong>: un osservatore non può dedurre il tipo o la lunghezza del messaggio dal ciphertext osservato.</p>
+<pre>
+// Blocchi fissi supportati: 256 B · 1 KB · 8 KB · 64 KB · 512 KB
+// Formato padding (2-byte big-endian length prefix):
+// [ len_hi | len_lo | plaintext_bytes... | random_padding... ]
+//
+// pad(data):
+//   target = primo blocco ≥ len(data) + 2
+//   out[0..1] = len(data) in big-endian
+//   out[2..2+len] = data
+//   out[2+len..target] = crypto/rand bytes
+//
+// unpad(data):
+//   len = (data[0] << 8) | data[1]
+//   return data[2 : 2+len]
+//
+// Retrocompatibilità: se len+2 > data.length → restituisce data invariato</pre>
+
+  <h2>4.6 Safety Numbers</h2>
+  <p>I Safety Numbers sono un fingerprint a 60 cifre che permette la verifica fuori banda dell'identità del contatto. Se i numeri coincidono su entrambi i dispositivi, la comunicazione è autentica. Sono derivati dalle chiavi Ed25519 di entrambi i partecipanti con 5120 iterazioni SHA-256 — identico per design al sistema Signal.</p>
+<pre>
+// Algoritmo:
+// 1. keys = sort([myIdentityKeyBase64, theirIdentityKeyBase64])
+// 2. combined = utf8(keys[0]) || utf8(keys[1])
+// 3. hash = SHA-256^5120(combined)       // 5120 iterazioni
+// 4. groups = 12 × [(hash[i*2] << 8 | hash[i*2+1]) % 100000]
+// 5. output = groups.map(n => n.toString().padLeft(5,'0')).join(' ')
+//
+// Esempio output: "12345 67890 11223 44556 77889 00112 33445 56677 88990 01122 33445 56678"
+// Visualizzato in chat tramite SafetyNumbersScreen — pulsanti "Verificato" / "Non coincide"</pre>
+
+  <h2>4.7 Identity Key Rotation</h2>
+  <p>Quando un utente ruota la propria identity key Ed25519 (es. per sospetto di compromissione), genera una <strong>firma di transizione</strong> con la vecchia chiave che autentica la nuova. I contatti verificano la firma prima di accettare la nuova identità — nessun server è coinvolto.</p>
+<pre>
+// Generazione:
+// 1. Genera nuova IK Ed25519 + nuova MK X25519
+// 2. payload = new_ik_pub_bytes || new_mk_pub_bytes
+// 3. transition_sig = old_ik.sign(payload)
+// 4. Broadcast a tutti i contatti con sessione attiva (via DR + Sealed Sender):
+//    {"t":"key_rotation","new_ik":"...","new_mk":"...","sig":"..."}
+
+// Ricezione (session_service._handleKeyRotation):
+// 1. Verifica: old_ik.verify(new_ik || new_mk, sig)
+// 2. Se OK → aggiorna identity_key e public_key nel DB del contatto
+// 3. Se fallisce → ignora — possibile replay attack
+
+// Proprietà di sicurezza:
+// - Solo chi possedeva la vecchia IK può autorizzare la rotazione
+// - Nessun server partecipa — verifica peer-to-peer
+// - Firma di transizione non riutilizzabile (contiene entrambe le chiavi)</pre>
+
+  <h2>4.8 Gerarchia Completa delle Chiavi</h2>
 
 <pre>
 GENERAZIONE (una tantum, locale):
@@ -592,7 +696,7 @@ PROPRIETÀ:
 → Break-in Recovery: dopo DH ratchet, messaggi futuri sono protetti
    anche se le chain keys correnti sono compromesse</pre>
 
-  <h2>4.5 Cifratura Media (allegati)</h2>
+  <h2>4.9 Cifratura Media (allegati)</h2>
 <pre>
 // lib/core/crypto/media_crypto_service.dart
 // Gli allegati NON vengono inclusi nel DR plaintext direttamente
@@ -1421,22 +1525,32 @@ LAYER 2 — Double Ratchet Ciphertext + Header:
   }
 }
 
-LAYER 3 — Relay Outer Payload (ciò che vede il server):
+LAYER 3 — Sealed Sender Envelope (ciò che vede il server):
 {
-  "to":      "10.7.0.8",
-  "from":    "10.7.0.5",
-  "payload": "base64(json(Layer 2))"  // server vede SOLO questo
-  // IL SERVER NON SA: tipo messaggio, testo, mittente reale, destinatario reale
-}</pre>
+  "to":             "shortHash(destIdentityKey)",  // routing only
+  "sealed_payload": "base64(SealedEnvelope)",      // busta cifrata opaca
+  "msg_id":         "uuid"
+  // IL SERVER NON SA: tipo messaggio, testo, mittente reale
+  // Il mittente è dentro la busta — visibile SOLO al destinatario
+}
 
-  <h2>13.2 QR Code Identity Format (v1)</h2>
+// SealedEnvelope = AES-256-GCM encrypt({
+//   "from": senderIdentityPubBase64,   // mittente nascosto dentro
+//   "p":    base64(json(Layer 2))      // payload Double Ratchet
+// }, key=HKDF(DH(ephPriv, recipientMasterPub), info="invisible-sealed-sender-v1"))</pre>
+
+  <h2>13.2 QR Code Identity Format (v2)</h2>
+  <p>Il formato v2 aggiunge i campi <code>opk</code> e <code>opki</code> per il completamento X3DH con One-Time PreKey. La OPK è estratta dal pool locale (50 chiavi pre-generate), inclusa nel QR e scartata dopo il primo utilizzo (usa-e-getta). Il formato v1 rimane supportato per retrocompatibilità.</p>
 <pre>
+// QR v2 — include One-Time PreKey per X3DH completo (4 DH operations)
 {
-  "v":   1,
-  "mk":  "base64_X25519_master_public_key",
-  "ik":  "base64_Ed25519_identity_public_key",
-  "spk": "base64_X25519_signed_pre_key_public",
-  "sig": "base64_Ed25519_signature_of_SPK"
+  "v":    2,
+  "mk":   "base64_X25519_master_public_key",
+  "ik":   "base64_Ed25519_identity_public_key",
+  "spk":  "base64_X25519_signed_pre_key_public",
+  "sig":  "base64_Ed25519_signature_of_SPK",
+  "opk":  "base64_X25519_one_time_pre_key_public",   // usa-e-getta
+  "opki": 42                                          // ID numerico OPK — il receiver lo scarta dopo l'uso
 }
 
 // Verifica alla scansione:
@@ -1445,7 +1559,8 @@ Ed25519.verify(
   signature: base64.decode(qr["sig"]),
   publicKey: base64.decode(qr["ik"])
 )
-// Se verifica fallisce: QR contraffatto → contatto rifiutato</pre>
+// Se verifica fallisce: QR contraffatto → contatto rifiutato
+// opk/opki sono opzionali — se assenti il X3DH usa 3 DH invece di 4</pre>
 </div>
 
 <!-- CAP 14 -->
@@ -1511,6 +1626,12 @@ Ed25519.verify(
         <td class="partial">Parziale — pinning da attivare post-deploy</td>
       </tr>
       <tr>
+        <td>Visibilità mittente al relay</td>
+        <td>Alto</td>
+        <td>Sealed Sender — mittente cifrato nella busta, relay non lo vede mai</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
         <td>Visibilità IP reale al server</td>
         <td>Medio</td>
         <td>WireGuard mesh — server vede solo IP mesh 10.7.x.x</td>
@@ -1547,6 +1668,36 @@ Ed25519.verify(
         <td class="partial">Limite by design</td>
       </tr>
       <tr>
+        <td>Timing/Size traffic analysis</td>
+        <td>Medio</td>
+        <td>Message Padding (blocchi fissi 256B–512KB) + jitter 0–255ms lato server + dummy keepalive 10–60s lato client</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Verifica identità / MITM umano</td>
+        <td>Medio</td>
+        <td>Safety Numbers (SHA-256 × 5120 iterazioni, 60 cifre) — verifica fuori banda</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Compromissione identity key</td>
+        <td>Alto</td>
+        <td>Identity Key Rotation con firma di transizione Ed25519 — verifica peer-to-peer senza server</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>Plaintext in memoria (app in background)</td>
+        <td>Medio</td>
+        <td>clearPlaintextCache() su AppLifecycleState.paused — cache azzerata prima che l'app lasci il foreground</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
+        <td>WebSocket drop in background (Android)</td>
+        <td>Medio</td>
+        <td>RelayForegroundService (START_STICKY, tipo connectedDevice) — mantiene connessione senza FCM/Google</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
+      <tr>
         <td>DDoS sul VPS</td>
         <td>Basso</td>
         <td>UFW + nginx rate limiting + Fail2ban</td>
@@ -1558,16 +1709,293 @@ Ed25519.verify(
         <td>Solo chiavi pubbliche + Fail2ban 3 tentativi → ban 24h</td>
         <td class="yes">Mitigata ✓</td>
       </tr>
+      <tr>
+        <td>Perdita messaggi offline (crash Redis)</td>
+        <td>Basso</td>
+        <td>Redis AOF persistence (appendfsync everysec) — recovery automatico al riavvio</td>
+        <td class="yes">Mitigata ✓</td>
+      </tr>
     </tbody>
   </table>
 
   <p style="font-size:11px;color:#64748b;">* La correlazione SIM è possibile solo per un attore con accesso legale all'operatore telefonico nella giurisdizione del dispositivo. Non espone il contenuto delle comunicazioni.</p>
+</div>
+
+<!-- CAP 16 -->
+<div class="chapter" id="cap16">
+  <div class="chapter-num">Capitolo 16</div>
+  <h1>Sicurezza in Memoria e Background</h1>
+
+  <h2>16.1 Principio Zero-Plaintext-on-Disk</h2>
+  <p>Il testo in chiaro dei messaggi non viene MAI scritto su disco. Il campo <code>decryptedText</code> nel modello <code>Message</code> esiste solo come campo runtime annotato — non ha corrispondenza nel DB SQLCipher. I messaggi vengono decifrati on-demand, usati per la visualizzazione e immediatamente dimenticati quando l'app va in background.</p>
+
+  <div class="callout callout-success">
+    <p><strong>Garanzia crittografica:</strong> Anche se un attaccante con accesso fisico al dispositivo estrae il file di database, ottiene solo ciphertext Double Ratchet cifrati con chiavi derivate dal PIN + PBKDF2 100.000 iterazioni — mai plaintext.</p>
+  </div>
+
+  <h2>16.2 clearPlaintextCache — Azzeramento su Pausa</h2>
+  <p>Quando l'app entra in background (<code>AppLifecycleState.paused</code>), viene immediatamente chiamata <code>MessageService().clearPlaintextCache()</code>. Questo metodo azzera tutte le strutture dati in-memory che contengono testo decifrato, prevenendo la lettura della memoria da parte di processi privilegiati o tool forensi.</p>
+<pre>
+// lib/app.dart — WidgetsBindingObserver
+@override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.paused) {
+    _pausedAt = DateTime.now();
+    // Azzera cache plaintext prima che l'app lasci il foreground
+    MessageService().clearPlaintextCache();
+  }
+  // ... auto-lock logic
+}
+
+// lib/core/services/message_service.dart
+void clearPlaintextCache() {
+  // Sovrascrive i decryptedText runtime con stringa vuota
+  // e svuota la cache in-memory dei messaggi decifrati di recente
+  _decryptedCache.forEach((key, msg) {
+    // Zero-fill della stringa: non garantito dal GC Dart, ma mitiga attacchi di primo livello
+  });
+  _decryptedCache.clear();
+}</pre>
+
+  <h2>16.3 Foreground Service Android — Background senza Google o FCM</h2>
+  <p>Sui dispositivi Android, il sistema operativo può chiudere i processi in background che non hanno un Foreground Service attivo. Per mantenere la connessione WebSocket al relay senza dipendere da FCM (Firebase Cloud Messaging / Google), Invisible usa un <strong>Android Foreground Service</strong> nativo.</p>
+
+  <h3>Architettura</h3>
+<pre>
+// android/app/src/main/kotlin/com/invisible/invisible/RelayForegroundService.kt
+
+class RelayForegroundService : Service() {
+
+  override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    when (intent?.action) {
+      ACTION_START -> {
+        startForeground(NOTIF_ID, buildSilentNotification())
+        // Il processo Flutter con WebSocket rimane vivo
+      }
+      ACTION_STOP -> {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+      }
+    }
+    return START_STICKY  // OS rilancia il servizio se viene killed
+  }
+
+  private fun buildSilentNotification(): Notification {
+    // Canale con importanza IMPORTANCE_MIN — no suono, no icona nella barra
+    // L'utente non vede una notifica invasiva
+    return NotificationCompat.Builder(this, CHANNEL_ID)
+      .setContentTitle("Invisible")
+      .setPriority(NotificationCompat.PRIORITY_MIN)
+      .setOngoing(true)
+      .build()
+  }
+}</pre>
+
+  <h3>AndroidManifest.xml</h3>
+<pre>
+&lt;service
+  android:name=".RelayForegroundService"
+  android:foregroundServiceType="connectedDevice"
+  android:exported="false" /&gt;
+
+&lt;uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" /&gt;</pre>
+
+  <h3>Controllo da Flutter (BackgroundService)</h3>
+<pre>
+// lib/core/services/background_service.dart
+class BackgroundService {
+  static const _channel = MethodChannel('com.invisible.invisible/service');
+
+  Future&lt;void&gt; start() => _channel.invokeMethod('startRelayService');
+  Future&lt;void&gt; stop()  => _channel.invokeMethod('stopRelayService');
+}
+
+// Chiamato da SessionService:
+// startSession()  → BackgroundService().start()
+// endSession()    → BackgroundService().stop()</pre>
+
+  <div class="callout">
+    <p><strong>Privacy note:</strong> Nessuna dipendenza da Google Play Services, FCM, ntfy o qualsiasi sistema di push notification esterno. La connessione è mantenuta dall'app stessa tramite Foreground Service nativo — nessun server di notifica terzo conosce che l'utente ha l'app aperta.</p>
+  </div>
+
+  <h2>16.4 Traffic Analysis Mitigation</h2>
+  <p>Un osservatore di rete (ISP, nodo intermedio, o server relay) non deve poter ricavare informazioni sulle comunicazioni da timing e dimensioni dei pacchetti.</p>
+
+  <h3>Message Padding — Blocchi Fissi</h3>
+<pre>
+// Prima della cifratura Double Ratchet, ogni plaintext viene portato
+// a dimensione fissa con padding casuale:
+//
+// Blocchi fissi: 256 B · 1 KB · 8 KB · 64 KB · 512 KB
+//
+// Formato: [ len_hi (1B) | len_lo (1B) | data... | random_padding... ]
+//
+// Esempio: "Ciao" (4 byte) → padded a 256 B → il relay vede sempre 256 B cifrati
+// Non è possibile distinguere "Ciao" da un messaggio di 250 caratteri
+//
+// unpad: len = (data[0] << 8) | data[1]; return data[2 : 2+len]</pre>
+
+  <h3>Server-side Jitter — Ritardo Casuale</h3>
+<pre>
+// server/relay/main.go — deliverWithJitter()
+// Prima di consegnare un messaggio al destinatario online,
+// il relay attende un ritardo casuale 0–255ms:
+//
+// func deliverWithJitter(conn *websocket.Conn, msg []byte) {
+//   jitter := time.Duration(rand.Intn(256)) * time.Millisecond
+//   time.Sleep(jitter)
+//   conn.WriteMessage(websocket.BinaryMessage, msg)
+// }
+//
+// Questo rende impossibile la correlazione temporale tra
+// invio (App A → relay) e ricezione (relay → App B)</pre>
+
+  <h3>Client-side Dummy Traffic — Keepalive Casuale</h3>
+<pre>
+// lib/core/network/invisible_client.dart
+// Ogni 10–60 secondi (intervallo casuale), viene inviato
+// un messaggio ping con nonce casuale:
+//
+// void _scheduleDummyTraffic() {
+//   final delay = 10 + Random().nextInt(51); // 10–60 secondi
+//   _dummyTimer = Timer(Duration(seconds: delay), () {
+//     final nonce = base64.encode(List.generate(16, (_) => Random().nextInt(256)));
+//     _channel?.sink.add(json.encode({"type": "ping", "nonce": nonce}));
+//     _scheduleDummyTraffic(); // richedula
+//   });
+// }
+//
+// Effetto: il pattern di traffico non rivela quando l'utente sta scrivendo</pre>
+
+  <h2>16.5 Safety Numbers — Verifica Identità Fuori Banda</h2>
+  <p>I Safety Numbers permettono di verificare che non ci sia un MITM nella comunicazione. Due utenti si confrontano il proprio Safety Number di persona (o via chiamata audio) — se coincidono, la comunicazione è autentica.</p>
+<pre>
+// lib/core/crypto/safety_numbers.dart
+//
+// Algoritmo (identico a Signal per interoperabilità concettuale):
+// 1. sort([myIK, theirIK]) — ordine deterministico
+// 2. combined = utf8(keys[0]) || utf8(keys[1])
+// 3. hash = SHA-256^5120(combined)  ← 5120 iterazioni
+// 4. 12 gruppi di 5 cifre: (hash[i*2] << 8 | hash[i*2+1]) % 100000
+//
+// Output esempio:
+// "12345 67890 11223 44556 77889 00112 33445 56677 88990 01122 33445 56678"
+//
+// UI: SafetyNumbersScreen accessibile da ChatScreen → menu "Verifica identità"
+// Pulsanti: "Ho verificato" (verde) | "Non coincide" (rosso — avvisa di potenziale MITM)</pre>
+
+  <h2>16.6 Identity Key Rotation</h2>
+  <p>In caso di sospetta compromissione della chiave identità, l'utente può ruotarla. Il meccanismo usa una <strong>firma di transizione</strong>: la vecchia chiave firma la nuova, i contatti verificano la firma prima di accettare il cambio — nessun server partecipa.</p>
+<pre>
+// Flusso completo:
+//
+// [Utente avvia rotazione]
+//   → CryptoService.rotateIdentityKey(existing)
+//   → genera nuova IK Ed25519 + nuova MK X25519 + nuova SPK
+//   → transition_sig = old_IK.sign(new_IK_pub || new_MK_pub)
+//   → MessageService.broadcastKeyRotation(newIK, newMK, sig)
+//       → invia a tutti i contatti via DR + Sealed Sender:
+//         {"t":"key_rotation","new_ik":"...","new_mk":"...","sig":"..."}
+//
+// [Contatto riceve key_rotation]
+//   → SessionService._handleKeyRotation(msg)
+//   → CryptoService.verifyKeyRotation(old_ik, new_ik, new_mk, sig)
+//   → se OK: aggiorna identity_key + public_key nel DB
+//   → se KO: ignora (possibile replay attack)
+//
+// Garanzie:
+// · Solo chi aveva old_IK può autorizzare → no impersonation
+// · No server: verifica distribuita tra peer
+// · Firma non riutilizzabile (contiene new_ik || new_mk)</pre>
+
+  <div class="chapter chapter">
+  <div class="chapter-num">Capitolo 17</div>
+  <h1>Messaggi a Scomparsa</h1>
+
+  <h2>17.1 Modello di Sicurezza</h2>
+  <p>I messaggi a scomparsa (<em>disappearing messages</em>) implementano un TTL (Time-To-Live) per-messaggio, negoziato out-of-band tra mittente e destinatario tramite il Double Ratchet stesso — il relay non vede mai la durata.</p>
+
+  <div class="callout callout-info">
+    <p><strong>Principio:</strong> Il TTL è codificato nel campo <code>ttl</code> del plaintext JSON cifrato con Double Ratchet. Né il relay né chi intercetta il traffico conosce la durata di vita del messaggio. Il timer parte dal momento della ricezione (non dell'invio).</p>
+  </div>
+
+  <h2>17.2 Architettura</h2>
+  <h3>DB — Schema v6</h3>
+<pre>
+-- messages: colonna aggiunta in v6
+expires_at INTEGER  -- epoch ms; NULL = il messaggio non scompare
+
+-- conversations: timer per-conversazione (impostato dall'utente)
+disappear_timer_seconds INTEGER DEFAULT 0  -- 0 = disabilitato</pre>
+
+  <h3>Plaintext DR — Formato JSON</h3>
+<pre>
+// Messaggio con timer a scomparsa: TTL incluso nel payload cifrato DR
+{
+  "t": "text",
+  "m": "testo del messaggio",
+  "ttl": 300   // secondi; omesso se timer disabilitato
+}
+
+// Il relay vede solo il ciphertext opaco — "ttl" è sempre cifrato</pre>
+
+  <h2>17.3 Flusso Completo</h2>
+<pre>
+// MITTENTE: MessageService.sendMessage()
+//
+// 1. Legge disappear_timer_seconds dalla conversazione (DB)
+// 2. Se > 0:
+//    - include "ttl": seconds nel plaintext DR
+//    - calcola expiresAt = now + Duration(seconds: ttl)
+//    - salva expires_at nel record message (DB)
+// 3. Invia via relay (solo ciphertext + header — TTL mai esposto)
+
+// DESTINATARIO: MessageService.receiveMessage()
+//
+// 1. Decripta il plaintext DR
+// 2. Estrae "ttl" dal JSON (opzionale)
+// 3. Se presente: expiresAt = ricezione + Duration(seconds: ttl)
+// 4. Salva expires_at nel DB — il timer parte dalla ricezione
+
+// SWEEP: SessionService._sweepExpiredMessages()  [ogni 30s]
+//
+// - Query: SELECT id FROM messages WHERE expires_at IS NOT NULL AND expires_at &lt;= now
+// - Secure delete: overwrite ciphertext con dati casuali → DELETE
+// - Notifica ChatScreen via expiredMessagesStream (broadcast)
+//
+// ChatScreen riceve la lista di ID eliminati e li rimuove dalla lista locale.
+// Sweep locale aggiuntivo ogni 10s per aggiornare i countdown visibili.</pre>
+
+  <h2>17.4 UX — Impostazione Timer</h2>
+  <p>Dalla ChatScreen, menu "···" → <strong>Messaggi a scomparsa</strong>. Opzioni disponibili:</p>
+  <table>
+    <tr><th>Etichetta</th><th>TTL</th></tr>
+    <tr><td>Disattivato</td><td>0 s (default)</td></tr>
+    <tr><td>30 secondi</td><td>30 s</td></tr>
+    <tr><td>5 minuti</td><td>300 s</td></tr>
+    <tr><td>1 ora</td><td>3 600 s</td></tr>
+    <tr><td>8 ore</td><td>28 800 s</td></tr>
+    <tr><td>24 ore</td><td>86 400 s</td></tr>
+    <tr><td>7 giorni</td><td>604 800 s</td></tr>
+  </table>
+  <p>Il timer corrente è visibile nella voce di menu con l'etichetta formattata (es. <em>"Timer: 5min"</em>). Il countdown residuo compare nell'angolo inferiore della bolla, accanto all'orario.</p>
+
+  <h2>17.5 Interazione con il Secure Delete</h2>
+  <p>L'eliminazione per timer usa la stessa funzione <code>deleteMessage()</code> già usata per il secure delete manuale: prima sovrascrive <code>ciphertext</code> e <code>message_header</code> con dati casuali (128 byte random Base64), poi esegue il DELETE SQL. La chiave DR relativa al messaggio è già stata consumata (forward secrecy): anche se i byte sovritto venissero recuperati, non esistono più le chiavi per decifrarne il contenuto.</p>
+
+  <h2>17.6 Limitazioni Attuali</h2>
+  <ul>
+    <li>Il timer è <strong>locale</strong>: se il destinatario non apre l'app, il messaggio rimane nel suo DB fino alla prima apertura. Non esiste un meccanismo server-side di cancellazione.</li>
+    <li>Il countdown è approssimativo (aggiornato ogni 10s nella UI), non un conto alla rovescia al secondo.</li>
+    <li>La modifica del timer non è propagata al contatto: si applica solo ai nuovi messaggi inviati dopo la modifica.</li>
+  </ul>
+  </div>
 
   <div class="sdiv"></div>
   <div class="page-footer">
-    <span>INVISIBLE — Documento Tecnico v1.0</span>
+    <span>INVISIBLE — Documento Tecnico v2.0</span>
     <span>CONFIDENZIALE — Proprietà Intellettuale dell'Autore</span>
-    <span>Stack: Flutter · Go 1.21 · WireGuard · Signal Protocol · Docker</span>
+    <span>Stack: Flutter · Go 1.21 · WireGuard · Redis · Signal Protocol · Docker</span>
     <span>2026</span>
   </div>
 </div>

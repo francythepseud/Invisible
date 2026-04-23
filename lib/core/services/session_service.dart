@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:crypto/crypto.dart' as crypto;
 import 'package:invisible/core/crypto/crypto_service.dart';
 import 'package:invisible/core/network/invisible_client.dart';
+import 'package:invisible/core/services/background_service.dart';
 import 'package:invisible/core/network/mesh_vpn_service.dart';
 import 'package:invisible/core/network/signaling_client.dart';
 import 'package:invisible/core/services/conversation_service.dart';
@@ -39,6 +40,7 @@ class SessionService {
   final Map<String, StreamController<Message>> _convStreams = {};
   StreamSubscription<IncomingRelayMessage>? _relaySubscription;
 
+
   // Global stream: ChatsListScreen si iscrive per aggiornare i badge in real-time
   final _anyMessageController = StreamController<Message>.broadcast();
   Stream<Message> get anyMessageStream => _anyMessageController.stream;
@@ -67,12 +69,14 @@ class SessionService {
     _connectRelay();
     _connectSignaling();
     _checkSpkRotation();
+    BackgroundService().start(); // mantiene WebSocket vivo in background (no FCM)
   }
 
   void _connectRelay() {
     _relaySubscription?.cancel();
     _relaySubscription = _relay.messageStream.listen(_onRelayMessage);
     _presenceService.start();
+
     if (_relay.status == RelayStatus.connected) return;
     _relay.connect(AppConstants.relayWsUrl).catchError((_) {});
   }
@@ -123,6 +127,9 @@ class SessionService {
 
       final ciphertext = payloadJson['ciphertext'] as String;
       final headerJson = payloadJson['header'] as String;
+      // Metadati X3DH presenti solo nel primo messaggio (handshake)
+      final x3dhEph = payloadJson['x3dh_eph'] as String?;
+      final x3dhOpkId = payloadJson['x3dh_opk_id'] as int?;
 
       // Ottieni o crea la conversazione con questo contatto
       final conversation =
@@ -135,8 +142,20 @@ class SessionService {
         ciphertextBase64: ciphertext,
         headerJson: headerJson,
         senderId: contact.id,
+        x3dhEphemeralPub: x3dhEph,
+        x3dhOpkId: x3dhOpkId,
       );
       debugPrint('[SESSION] Messaggio decriptato OK: ${message.id}');
+
+      // Se è una key rotation, aggiorna la chiave del contatto e non mostrare in chat
+      final decText = message.decryptedText ?? '';
+      if (decText.contains('"t":"key_rotation"')) {
+        await _handleKeyRotation(contact, decText, db);
+        await _messageService.deleteMessage(message.id);
+        await _conversationService.decrementUnreadCount(conversation.id);
+        await _conversationService.refreshLastMessage(conversation.id);
+        return;
+      }
 
       // Se è una read receipt, aggiorna i messaggi uscenti e notifica la UI
       if (message.decryptedText == '{"t":"rr"}' || message.decryptedText?.trim() == '{"t":"rr"}') {
@@ -168,6 +187,53 @@ class SessionService {
       NotificationService().showMessageNotification();
     } catch (e, st) {
       debugPrint('[SESSION] Errore ricezione messaggio: $e\n$st');
+    }
+  }
+
+  // ─── Gestione key rotation ───────────────────────────────────────────────────
+
+  /// Verifica e applica la rotazione delle chiavi di un contatto.
+  /// Se la firma di transizione è valida, aggiorna identity_key e public_key nel DB.
+  Future<void> _handleKeyRotation(
+    Contact contact,
+    String decryptedText,
+    dynamic db,
+  ) async {
+    try {
+      final map = jsonDecode(decryptedText) as Map<String, dynamic>;
+      final newIk = map['new_ik'] as String?;
+      final newMk = map['new_mk'] as String?;
+      final sig = map['sig'] as String?;
+      if (newIk == null || newMk == null || sig == null) return;
+
+      final oldIk = contact.identityKey;
+      if (oldIk == null) {
+        debugPrint('[SESSION] key_rotation ignorata: identityKey del contatto assente');
+        return;
+      }
+
+      final valid = await _cryptoService.verifyKeyRotation(
+        oldIdentityKeyBase64: oldIk,
+        newIdentityKeyBase64: newIk,
+        newMasterKeyBase64: newMk,
+        signatureBase64: sig,
+      );
+
+      if (!valid) {
+        debugPrint('[SESSION] key_rotation FIRMA INVALIDA per ${contact.name} — ignorata');
+        return;
+      }
+
+      // Aggiorna le chiavi nel DB
+      await db.update(
+        'contacts',
+        {'identity_key': newIk, 'public_key': newMk, 'updated_at': DateTime.now().millisecondsSinceEpoch},
+        where: 'id = ?',
+        whereArgs: [contact.id],
+      );
+      debugPrint('[SESSION] key_rotation applicata per ${contact.name} — nuova IK: ${newIk.substring(0, 8)}…');
+    } catch (e) {
+      debugPrint('[SESSION] _handleKeyRotation errore: $e');
     }
   }
 
@@ -207,6 +273,7 @@ class SessionService {
     await _relay.disconnect();
     await _mesh.disconnect();
     await _signaling.disconnect();
+    await BackgroundService().stop(); // ferma il foreground service Android
     for (final ctrl in _convStreams.values) {
       if (!ctrl.isClosed) ctrl.close();
     }

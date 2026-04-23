@@ -38,6 +38,8 @@ class ContactService {
     String? identityKey,
     String? signedPreKey,
     String? signedPreKeySig,
+    String? opkPub,
+    int? opkId,
   }) async {
     final db = _profileService.currentDatabase;
     if (db == null) throw Exception('Nessun database aperto');
@@ -81,6 +83,8 @@ class ContactService {
       identityKey: identityKey,
       signedPreKey: signedPreKey,
       signedPreKeySig: signedPreKeySig,
+      opkPub: opkPub,
+      opkId: opkId,
       createdAt: DateTime.now(),
       updatedAt: DateTime.now(),
     );

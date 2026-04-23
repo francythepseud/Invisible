@@ -12,7 +12,7 @@ networks:
 volumes:
   mesh-keys:        # chiavi WireGuard del server (persistenti)
   nginx-certs:      # certificati TLS
-  relay-data:       # messaggi offline cifrati (bbolt, persistenti)
+  redis-data:       # messaggi offline cifrati (Redis AOF, persistenti)
   postgres-data:    # database PostgreSQL (ToS acceptances, audit log)
 
 # ── Servizi ───────────────────────────────────────────────────────────────────
@@ -62,20 +62,46 @@ services:
       timeout: 5s
       retries: 3
 
-  # ── 3. Relay (messaggi E2E cifrati) ─────────────────────────────────────────
+  # ── 3a. Redis (coda messaggi offline — TTL automatico, AOF persistence) ────────
+  redis:
+    image: redis:7-alpine
+    container_name: invisible-redis
+    restart: unless-stopped
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --appendonly yes
+      --appendfsync everysec
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --bind 0.0.0.0
+      --protected-mode no
+    volumes:
+      - redis-data:/data
+    networks:
+      - invisible-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── 3b. Relay (messaggi E2E cifrati) ────────────────────────────────────────
   relay:
     build: ./relay
     container_name: invisible-relay
     restart: unless-stopped
     environment:
-      PORT:          "8082"
-      MSG_TTL_HOURS: "168"
-      MSG_DB_PATH:   "/data/relay.db"
-      ADMIN_URL:     "http://invisible-admin:8084"
-    volumes:
-      - relay-data:/data
+      PORT:           "8082"
+      MSG_TTL_HOURS:  "168"
+      REDIS_ADDR:     "invisible-redis:6379"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      ADMIN_URL:      "http://invisible-admin:8084"
     networks:
       - invisible-net
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8082/healthz"]
       interval: 30s
