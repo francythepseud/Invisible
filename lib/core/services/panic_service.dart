@@ -106,7 +106,13 @@ class PanicService {
     } catch (_) {}
 
     // 3. Cancella tutte le chiavi da FlutterSecureStorage (KeyStore/Keychain)
+    // Prima cancella esplicitamente profiles_list per garantire che getProfiles()
+    // ritorni vuoto anche se deleteAll() fallisce parzialmente su Android.
+    try { await _secureStorage.delete(key: 'profiles_list'); } catch (_) {}
     try { await _secureStorage.deleteAll(); } catch (_) {}
+
+    // 3b. Reset cache in-memory del ProfileService (singleton)
+    _profileService.resetSession();
 
     // 4. Cancella tutta la cartella documenti dell'app (media, file allegati, ecc.)
     try {

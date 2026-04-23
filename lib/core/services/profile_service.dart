@@ -40,6 +40,12 @@ class ProfileService {
   Profile? get currentProfile => _currentProfile;
   Database? get currentDatabase => _currentDatabase;
 
+  /// Resetta la cache in-memory (chiamato dopo wipeAll)
+  void resetSession() {
+    _currentProfile = null;
+    _currentDatabase = null;
+  }
+
   /// Ottiene la lista di tutti i profili salvati
   Future<List<Profile>> getProfiles() async {
     try {
