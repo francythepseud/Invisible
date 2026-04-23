@@ -72,7 +72,9 @@ class MessageService {
     RatchetState? ratchetState =
         await _conversationService.loadRatchetState(conversationId);
 
-    if (ratchetState == null) {
+    // Inizializza (o reinizializza) come sender se non c'è stato o se
+    // sendingChainKey è null (receiver che non ha ancora ricevuto il primo messaggio)
+    if (ratchetState == null || ratchetState.sendingChainKey == null) {
       final conversation =
           await _conversationService.getConversation(conversationId);
       if (conversation == null) throw Exception('Conversation not found');
@@ -92,6 +94,7 @@ class MessageService {
           ? contact.first['opk_id'] as int?
           : null;
 
+      debugPrint('[MSG] sendingChainKey null, reinizializza sessione come sender');
       ratchetState = await _conversationService.initializeSession(
         conversationId: conversationId,
         theirPublicKeyBase64: conversation.contactPublicKey,
