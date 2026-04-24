@@ -93,9 +93,14 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       _ringtonePath = ringFile.path;
 
       _player = AudioPlayer();
-      await _player!.setLoopMode(LoopMode.one);
+      // Aspetta che il player sia inizializzato prima di configurarlo
+      // (evita il deadlock "Cannot complete a future with itself" su just_audio)
+      await Future.delayed(Duration.zero);
       await _player!.setVolume(1.0);
-      await _player!.setFilePath(_ringtonePath!);
+      await _player!.setLoopMode(LoopMode.one);
+      await _player!.setAudioSource(
+        AudioSource.file(_ringtonePath!),
+      );
       await _player!.play();
     } catch (e, st) {
       ErrorReportingService.log(e, st, 'RingtoneError');
