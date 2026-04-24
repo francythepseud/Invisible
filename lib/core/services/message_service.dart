@@ -73,9 +73,10 @@ class MessageService {
     RatchetState? ratchetState =
         await _conversationService.loadRatchetState(conversationId);
 
-    // Inizializza (o reinizializza) come sender se non c'è stato o se
-    // sendingChainKey è null (receiver che non ha ancora ricevuto il primo messaggio)
-    if (ratchetState == null || ratchetState.sendingChainKey == null) {
+    // Se non esiste sessione, inizializza come sender (X3DH initiator).
+    // Chi manda per primo è sempre l'initiator — il receiver si inizializza
+    // automaticamente al momento della prima ricezione in receiveMessage().
+    if (ratchetState == null) {
       final conversation =
           await _conversationService.getConversation(conversationId);
       if (conversation == null) throw Exception('Conversation not found');
@@ -95,7 +96,6 @@ class MessageService {
           ? contact.first['opk_id'] as int?
           : null;
 
-      debugPrint('[MSG] sendingChainKey null, reinizializza sessione come sender');
       ratchetState = await _conversationService.initializeSession(
         conversationId: conversationId,
         theirPublicKeyBase64: conversation.contactPublicKey,
@@ -103,6 +103,12 @@ class MessageService {
         theirOPKBase64: opkPub,
         theirOPKId: opkId,
       );
+    }
+
+    // sendingChainKey null = siamo stati inizializzati come receiver e non abbiamo
+    // ancora ricevuto il primo messaggio — il DH ratchet step non è avvenuto.
+    if (ratchetState.sendingChainKey == null) {
+      throw Exception('In attesa del primo messaggio dal contatto...');
     }
 
     // Costruisce il plaintext DR come JSON strutturato (tipo + media dentro DR)
@@ -117,6 +123,8 @@ class MessageService {
       encryptedMessage = await _doubleRatchet.encrypt(ratchetState, plaintextBytes);
     } catch (e, st) {
       ErrorReportingService().reportError(e, stackTrace: st, errorType: 'EncryptError');
+      // Stato corrotto: cancella così la prossima send reinizializza da zero
+      await _conversationService.clearRatchetState(conversationId);
       rethrow;
     }
 
@@ -270,7 +278,7 @@ class MessageService {
         await _conversationService.loadRatchetState(conversationId);
 
     if (ratchetState == null) {
-      // Prima ricezione: inizializza come ricevente con X3DH completo
+      // Prima ricezione: inizializza come receiver con X3DH completo
       final conv = await _conversationService.getConversation(conversationId);
       if (conv == null) throw Exception('Conversation not found');
       final contactRows = await _db.query(
@@ -327,6 +335,9 @@ class MessageService {
         decryptedMessage = await _doubleRatchet.decrypt(ratchetState, encryptedMessage);
       } catch (e2, st2) {
         ErrorReportingService().reportError(e2, stackTrace: st2, errorType: 'DecryptErrorFatal');
+        // Cancella lo stato corrotto: al prossimo invio da entrambi i lati
+        // la sessione verrà reinizializzata da zero con nuovi X3DH params.
+        await _conversationService.clearRatchetState(conversationId);
         rethrow;
       }
     }
@@ -527,7 +538,7 @@ class MessageService {
 
       RatchetState? ratchetState =
           await _conversationService.loadRatchetState(conversationId);
-      if (ratchetState == null) return;
+      if (ratchetState == null || ratchetState.sendingChainKey == null) return;
 
       final plaintext = MessagePadding.pad(
         Uint8List.fromList(utf8.encode('{"t":"rr"}')),

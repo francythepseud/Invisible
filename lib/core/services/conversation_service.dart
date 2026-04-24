@@ -274,6 +274,23 @@ class ConversationService {
       x3dhOpkId: x3dhOpkId,
     );
 
+    // Se x3dhEphemeralPub non è fornita, preserva il valore esistente nel DB
+    // (serve per tutti i messaggi successivi al primo finché Bob non risponde)
+    String? ephToSave = x3dhEphemeralPub;
+    int? opkIdToSave = x3dhOpkId;
+    if (ephToSave == null) {
+      final existing = await _db.query(
+        'ratchet_states',
+        columns: ['x3dh_ephemeral_pub', 'x3dh_opk_id'],
+        where: 'conversation_id = ?',
+        whereArgs: [conversationId],
+      );
+      if (existing.isNotEmpty) {
+        ephToSave = existing.first['x3dh_ephemeral_pub'] as String?;
+        opkIdToSave = existing.first['x3dh_opk_id'] as int?;
+      }
+    }
+
     // Cancella stato precedente
     await _db.delete(
       'ratchet_states',
@@ -281,8 +298,24 @@ class ConversationService {
       whereArgs: [conversationId],
     );
 
-    // Inserisci nuovo stato
-    await _db.insert('ratchet_states', model.toMap());
+    // Inserisci nuovo stato preservando i metadati X3DH
+    final modelToSave = RatchetStateModel(
+      id: model.id,
+      conversationId: model.conversationId,
+      rootKey: model.rootKey,
+      sendingChainKey: model.sendingChainKey,
+      receivingChainKey: model.receivingChainKey,
+      ourRatchetPrivateKey: model.ourRatchetPrivateKey,
+      ourRatchetPublicKey: model.ourRatchetPublicKey,
+      theirRatchetPublicKey: model.theirRatchetPublicKey,
+      sendCount: model.sendCount,
+      receiveCount: model.receiveCount,
+      previousSendCount: model.previousSendCount,
+      updatedAt: model.updatedAt,
+      x3dhEphemeralPub: ephToSave,
+      x3dhOpkId: opkIdToSave,
+    );
+    await _db.insert('ratchet_states', modelToSave.toMap());
   }
 
   /// Carica i metadati X3DH dello stato ratchet (ephemeral pub + opk id).
@@ -309,6 +342,16 @@ class ConversationService {
     RatchetState state,
   ) async {
     await _saveRatchetState(conversationId, state);
+  }
+
+  /// Cancella lo stato ratchet di una conversazione (usato per auto-recovery
+  /// dopo DecryptErrorFatal: forza reinizializzazione al prossimo scambio).
+  Future<void> clearRatchetState(String conversationId) async {
+    await _db.delete(
+      'ratchet_states',
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+    );
   }
 
   /// Ricostruisce RatchetState dal modello database
